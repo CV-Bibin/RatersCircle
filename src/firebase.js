@@ -1,8 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";        // Needed for Login
-import { getDatabase } from "firebase/database"; // Needed for Realtime Chat
+import { getAuth } from "firebase/auth";
+import { getDatabase } from "firebase/database";
+// 1. ADD THIS IMPORT
+import { getStorage } from "firebase/storage"; 
 
-// This looks for the values inside your .env file
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_API_KEY,
   authDomain: process.env.REACT_APP_AUTH_DOMAIN,
@@ -14,9 +15,9 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_MEASUREMENT_ID
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize and Export Services
 export const auth = getAuth(app);
 export const database = getDatabase(app);
+// 2. EXPORT STORAGE SERVICE
+export const storage = getStorage(app);

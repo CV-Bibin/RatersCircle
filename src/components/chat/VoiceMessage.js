@@ -13,20 +13,29 @@ export default function VoiceMessage({ msg, isMe, nameTextColor, canSeeDeletedCo
 
   // Formatting Time (mm:ss)
   const formatTime = (time) => {
-    if (!time) return "0:00";
+    if (!time || isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
+  // --- SAFE PLAY FUNCTION ---
+  const togglePlay = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+        if (isPlaying) {
+            audio.pause();
+            setIsPlaying(false);
+        } else {
+            setIsPlaying(true);
+            await audio.play();
+        }
+    } catch (error) {
+        console.error("Playback interrupted:", error);
+        setIsPlaying(false);
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleTimeUpdate = () => {
@@ -60,7 +69,7 @@ export default function VoiceMessage({ msg, isMe, nameTextColor, canSeeDeletedCo
                 <Trash2 size={14} /> 
              </div>
              <p className="text-xs text-gray-400 italic">
-                {msg.deletedByRole === 'admin' || msg.deletedByRole === 'leader' || msg.deletedByRole === 'co_admin' 
+                {['admin', 'leader', 'co_admin'].includes(msg.deletedByRole)
                     ? `Deleted by ${msg.deletedByRole}`
                     : "Voice note deleted"
                 }
@@ -77,9 +86,10 @@ export default function VoiceMessage({ msg, isMe, nameTextColor, canSeeDeletedCo
           : isMe ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white text-gray-800 rounded-tl-sm'}`
     }>
        {/* Hidden Native Audio Element */}
+       {/* FIX: Changed msg.audioUrl -> msg.mediaUrl to match your DB logic */}
        <audio 
          ref={audioRef} 
-         src={msg.audioUrl} 
+         src={msg.mediaUrl} 
          onTimeUpdate={handleTimeUpdate}
          onEnded={handleEnded}
          onLoadedMetadata={handleLoadedMetadata}
@@ -101,18 +111,18 @@ export default function VoiceMessage({ msg, isMe, nameTextColor, canSeeDeletedCo
 
           {/* Waveform / Progress Area */}
           <div className="flex-1 flex flex-col gap-1 justify-center">
-             
-             {/* Name (if group chat) */}
-             {!isMe && !isDeleted && (
-                <p className={`text-[10px] font-bold ${nameTextColor} leading-none mb-0.5`}>
-                   {msg.senderEmail.split('@')[0]}
-                </p>
-             )}
+              
+              {/* Name (if group chat) */}
+              {!isMe && !isDeleted && (
+                 <p className={`text-[10px] font-bold ${nameTextColor} leading-none mb-0.5`}>
+                    {msg.senderEmail.split('@')[0]}
+                 </p>
+              )}
 
-             {/* FAKE WAVEFORM VISUALIZATION */}
-             <div className="relative h-6 w-full flex items-center gap-[2px] opacity-80">
-                {/* We generate 30 bars to mimic a wave */}
-                {[...Array(25)].map((_, i) => {
+              {/* FAKE WAVEFORM VISUALIZATION */}
+              <div className="relative h-6 w-full flex items-center gap-[2px] opacity-80">
+                 {/*  */}
+                 {[...Array(25)].map((_, i) => {
                     // Create a random-looking pattern that is static
                     const height = [40, 60, 100, 50, 30, 70, 90, 40, 60, 80, 40, 60, 100, 50, 30, 70, 90, 40, 60, 80, 50, 30, 60, 40, 50][i] || 50;
                     
@@ -126,14 +136,14 @@ export default function VoiceMessage({ msg, isMe, nameTextColor, canSeeDeletedCo
                            style={{ height: `${height}%` }}
                         />
                     );
-                })}
-             </div>
+                 })}
+              </div>
 
-             {/* Time Display */}
-             <div className={`text-[10px] font-medium flex justify-between w-full ${isMe && !isDeleted ? 'text-blue-100' : 'text-gray-400'}`}>
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-             </div>
+              {/* Time Display */}
+              <div className={`text-[10px] font-medium flex justify-between w-full ${isMe && !isDeleted ? 'text-blue-100' : 'text-gray-400'}`}>
+                 <span>{formatTime(currentTime)}</span>
+                 <span>{formatTime(duration)}</span>
+              </div>
           </div>
        </div>
 

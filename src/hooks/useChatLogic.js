@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+// 1. IMPORT DATABASE ONLY (Removed Storage imports)
 import { database } from '../firebase';
 import { ref, push, set, update, remove, get, onValue, runTransaction, serverTimestamp } from 'firebase/database';
 import useChatData from './useChatData'; 
@@ -23,17 +24,16 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
   // --- EXISTING HOOKS ---
   const { 
     handleSendMessage, handleFileUpload, 
-    handleSendAudio, handleForwardAction, getMessageSnippet 
+    handleForwardAction, getMessageSnippet 
   } = useMessageActions(activeGroup, currentUser, userData);
 
-  // REMOVED handleReveal from here to define it manually below
   const { 
     handleReaction, confirmDeleteAction, 
     handlePinAction, handleUnpinAction, isManager 
   } = useInteractionLogic(activeGroup, currentUser, userData, getMessageSnippet);
 
   // =================================================================================
-  //  🔥 POLL LOGIC (Create, Vote, Reveal)
+  //  🔥 1. POLL LOGIC (Create, Vote, Reveal)
   // =================================================================================
 
   const handleCreatePoll = async (pollData) => {
@@ -97,15 +97,53 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
     }).catch(console.error);
   };
 
-  // --- NEW: REVEAL ANSWER FUNCTION ---
   const handleReveal = async (messageId) => {
     if (!activeGroup) return;
     try {
       const pollRef = ref(database, `groups/${activeGroup.id}/messages/${messageId}/poll`);
-      // Simply update the boolean flag in the DB
       await update(pollRef, { isRevealed: true });
     } catch (error) {
       console.error("Error revealing answer:", error);
+    }
+  };
+
+  // =================================================================================
+  //  🎤 2. AUDIO LOGIC (DATABASE ONLY - NO STORAGE REQUIRED)
+  // =================================================================================
+  
+  const handleSendAudio = async (audioBlob) => {
+    if (!activeGroup || !currentUser) return;
+
+    // Helper: Convert Blob to Base64 String
+    const blobToBase64 = (blob) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    };
+
+    try {
+      // 1. Convert Audio to String (Base64)
+      const base64Audio = await blobToBase64(audioBlob);
+
+      // 2. Save Message to Database (Storing audio data directly in the message)
+      const messagesRef = ref(database, `groups/${activeGroup.id}/messages`);
+      const newMessageRef = push(messagesRef);
+
+      await set(newMessageRef, {
+        senderId: currentUser.uid,
+        senderEmail: currentUser.email,
+        type: 'audio',
+        mediaUrl: base64Audio, // This string works directly in <audio src="...">
+        text: 'Voice Message',
+        createdAt: serverTimestamp(),
+      });
+
+    } catch (error) {
+      console.error("Error sending voice message:", error);
+      alert("Failed to send voice message.");
     }
   };
 
@@ -192,10 +230,12 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
     handleDeleteClick,
     handleStarMessage,
     handleFileUpload, 
-    handleSendAudio, 
+    
+    handleSendAudio, // Now uses the Base64 logic
+    
     handleCreatePoll, 
     handleVote,       
-    handleReveal, // <--- Now using the local function
+    handleReveal, 
     handleReaction, 
     handlePin: handlePinAction,
     handleUnpin: handleUnpinAction,
