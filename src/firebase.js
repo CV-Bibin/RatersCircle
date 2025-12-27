@@ -1,19 +1,17 @@
-// src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";        // Needed for Login
 import { getDatabase } from "firebase/database"; // Needed for Realtime Chat
 
+// This looks for the values inside your .env file
 const firebaseConfig = {
-  apiKey: "AIzaSyBqvyQHCrmRTz2wFw88KfeLFWZJkS9C3Rs",
-  authDomain: "chatapp-38b38.firebaseapp.com",
-  projectId: "chatapp-38b38",
-  // IMPORTANT: You must paste your Realtime Database URL here!
-  // It usually looks like this (check your Firebase Console to be sure):
-  databaseURL: "https://chatapp-38b38-default-rtdb.firebaseio.com", 
-  storageBucket: "chatapp-38b38.firebasestorage.app",
-  messagingSenderId: "249017632366",
-  appId: "1:249017632366:web:23c7b606798bc66cc4487f",
-  measurementId: "G-BM7LDDX0G7"
+  apiKey: process.env.REACT_APP_API_KEY,
+  authDomain: process.env.REACT_APP_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_PROJECT_ID,
+  databaseURL: process.env.REACT_APP_DATABASE_URL,
+  storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_APP_ID,
+  measurementId: process.env.REACT_APP_MEASUREMENT_ID
 };
 
 // Initialize Firebase
