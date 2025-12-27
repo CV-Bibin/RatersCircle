@@ -5,33 +5,39 @@ export default function UserList({ users, title, currentUserRole, userStatuses }
   
   // --- VISIBILITY HELPER ---
   const getStatusDisplay = (userId, targetRole) => {
-    const userStatus = userStatuses[userId]; // Use prop instead of state
+    const userStatus = userStatuses[userId]; 
     const isOffline = !userStatus || userStatus.state === 'offline';
     
-    // 1. Is the target an Admin or Asst Admin?
-    const isTargetHighAdmin = targetRole === 'admin' || targetRole === 'assistant_admin';
-    // 2. Am I (the viewer) a High Admin?
-    const amIHighAdmin = currentUserRole === 'admin' || currentUserRole === 'assistant_admin';
+    // 1. Identification
+    const isTargetMainAdmin = targetRole === 'admin';
+    const amIMainAdmin = currentUserRole === 'admin';
+    const amIAuthorizedViewer = ['admin', 'co_admin', 'assistant_admin'].includes(currentUserRole);
 
-    // RULE A: Raters/Co-Admins/Leaders CANNOT see status of Main Admins
-    if (isTargetHighAdmin && !amIHighAdmin) {
-      return null; 
+    // --- RULE: PRIVACY SHIELD FOR MAIN ADMIN ---
+    // Co-Admins and Assistant Admins CANNOT see status/last seen of the Main Admin
+    if (isTargetMainAdmin && !amIMainAdmin) {
+      return <span className="text-[10px] text-gray-300">Always Online</span>; 
     }
 
-    // RULE B: Admins can choose to HIDE themselves
-    if (userStatus?.isHidden && !amIHighAdmin) {
+    // RULE B: Admins can choose to HIDE themselves (if your system supports isHidden)
+    if (userStatus?.isHidden && !amIMainAdmin) {
        return null;
     }
 
-    // --- RENDER ---
+    // --- RENDER ONLINE STATUS ---
     if (!isOffline) {
       return <span className="text-[10px] font-bold text-green-500">● Online</span>;
     }
 
-    // RULE C: "Last Seen" logic
-    if (amIHighAdmin && userStatus?.last_changed) {
+    // --- RULE C: "Last Seen" logic ---
+    // Only Authorized viewers can see "Last Seen" for non-Main Admin users
+    if (amIAuthorizedViewer && userStatus?.last_changed) {
       const date = new Date(userStatus.last_changed);
-      return <span className="text-[10px] text-gray-400">Last seen: {date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>;
+      return (
+        <span className="text-[10px] text-gray-400">
+            Last seen: {date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+        </span>
+      );
     }
 
     return <span className="text-[10px] text-gray-300">Offline</span>;
@@ -45,14 +51,23 @@ export default function UserList({ users, title, currentUserRole, userStatuses }
       <div className="space-y-2">
         {users.map((u) => {
           const style = getRoleStyle(u.role, u.status);
+          
+          // Helper for Green Dot logic
+          const isTargetMainAdmin = u.role === 'admin';
+          const amIMainAdmin = currentUserRole === 'admin';
+
           return (
             <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100 transition">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm relative ${style.bg} ${style.text}`}>
                 {u.email[0]?.toUpperCase()}
                 
-                {/* Green Dot */}
+                {/* Green Dot Logic */}
                 {userStatuses[u.id]?.state === 'online' && (
-                   (currentUserRole === 'admin' || currentUserRole === 'assistant_admin' || (u.role !== 'admin' && u.role !== 'assistant_admin')) ? (
+                   /* Show dot ONLY IF:
+                      1. Target is NOT the Main Admin
+                      2. OR the Viewer IS the Main Admin
+                   */
+                   (!isTargetMainAdmin || amIMainAdmin) ? (
                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                    ) : null
                 )}

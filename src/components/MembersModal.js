@@ -1,15 +1,13 @@
 import React from 'react';
-import { X, Trash2, User } from 'lucide-react';
+import { X, Trash2, User, Clock } from 'lucide-react'; // Added Clock icon
 import { database } from '../firebase';
 import { ref, remove } from 'firebase/database';
 
 export default function MembersModal({ activeGroup, isOpen, onClose, currentUser, userProfiles, isManager, userData }) {
   if (!isOpen || !activeGroup) return null;
 
-  // Convert members object to array
   const memberIds = activeGroup.members ? Object.keys(activeGroup.members) : [];
 
-  // --- HELPER: Role Hierarchy Levels ---
   const getRoleLevel = (role) => {
     switch (role) {
       case 'admin': return 100;
@@ -18,17 +16,18 @@ export default function MembersModal({ activeGroup, isOpen, onClose, currentUser
       case 'leader': return 50;
       case 'group_leader': return 50;
       case 'rater': return 10;
-      default: return 0; // Member
+      default: return 0; 
     }
   };
 
-  // Calculate my level once
   const myRoleLevel = getRoleLevel(userData?.role);
+
+  // --- NEW: Helper to check if current user can see "Last Seen" ---
+  const canSeeLastSeen = ['admin', 'co_admin', 'assistant_admin'].includes(userData?.role);
 
   const handleRemoveUser = async (userId) => {
     if (!window.confirm("Remove this user from the group?")) return;
     try {
-      // Remove user from the group's member list
       await remove(ref(database, `groups/${activeGroup.id}/members/${userId}`));
     } catch (error) {
       console.error("Error removing user:", error);
@@ -58,13 +57,7 @@ export default function MembersModal({ activeGroup, isOpen, onClose, currentUser
             const role = profile.role || "member";
             const isMe = uid === currentUser.uid;
             
-            // --- HIERARCHY CHECK ---
             const targetRoleLevel = getRoleLevel(role);
-            
-            // Rules for removal:
-            // 1. Must be a Manager/Admin
-            // 2. Cannot remove yourself
-            // 3. My Level must be HIGHER than their Level (e.g. Leader cannot remove Admin)
             const canRemove = isManager && !isMe && (myRoleLevel > targetRoleLevel);
 
             return (
@@ -76,7 +69,22 @@ export default function MembersModal({ activeGroup, isOpen, onClose, currentUser
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-800">{name} {isMe && "(You)"}</p>
-                    <p className="text-[10px] text-gray-400 uppercase">{role}</p>
+                    <div className="flex flex-col">
+                      <p className="text-[10px] text-gray-400 uppercase font-semibold">{role}</p>
+                      
+                      {/* --- NEW: Show Last Seen for authorized roles --- */}
+                      {canSeeLastSeen && profile.lastSeen && !isMe && (
+                        <p className="text-[9px] text-blue-500 flex items-center gap-1 mt-0.5">
+                          <Clock size={10} />
+                          Last seen: {new Date(profile.lastSeen).toLocaleString([], { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
