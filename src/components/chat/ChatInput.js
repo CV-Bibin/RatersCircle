@@ -2,26 +2,30 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Lock, X, Edit2, BarChart2, Mic, Plus } from 'lucide-react';
 import { database, auth } from '../../firebase';
 import { ref, update } from 'firebase/database';
-import AttachmentMenu from './AttachmentMenu'; // <--- NEW IMPORT
+import AttachmentMenu from './AttachmentMenu';
 
 export default function ChatInput({ 
-    onSendMessage, isRestricted, isManager, 
-    replyTo, onCancelReply, 
-    activeGroupId,
-    editingMessage, onCancelEdit,
-    onOpenPoll,
-    onSendAudio,
-    onUploadFile, // This now expects (file, category)
-    userXP = 0 
+  onSendMessage, isRestricted, isManager, 
+  onTyping, // <--- 1. NEW PROP RECEIVED HERE
+  replyTo, onCancelReply, 
+  activeGroupId,
+  editingMessage, onCancelEdit,
+  onOpenPoll,
+  onSendAudio,
+  onUploadFile, 
+  userXP = 0 
 }) {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [showMenu, setShowMenu] = useState(false); // <--- MENU STATE
+  const [showMenu, setShowMenu] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+
+  // 2. NEW: Ref for debouncing the typing indicator
+  const typingTimeoutRef = useRef(null);
 
   const canCreatePoll = isManager || userXP >= 500; 
 
@@ -39,6 +43,7 @@ export default function ChatInput({
     else setNewMessage("");
   }, [editingMessage]);
 
+  // --- EXISTING "STATUS" TYPING LOGIC (Global Profile Status) ---
   useEffect(() => {
     if (!auth.currentUser || !activeGroupId) return;
     const statusRef = ref(database, `status/${auth.currentUser.uid}`);
@@ -51,11 +56,26 @@ export default function ChatInput({
     return () => clearTimeout(timer);
   }, [newMessage, activeGroupId, isTyping]);
 
+  // --- UPDATED TYPING HANDLER ---
   const handleTyping = (e) => {
-    setNewMessage(e.target.value);
+    const val = e.target.value;
+    setNewMessage(val);
+
+    // A. Trigger Existing Status Logic (Global)
     if (!isTyping && activeGroupId) {
       setIsTyping(true);
       update(ref(database, `status/${auth.currentUser.uid}`), { typingIn: activeGroupId });
+    }
+
+    // B. Trigger New Group Typing Logic (Chat Window Indicator)
+    if (onTyping) {
+        onTyping(true);
+        // Clear previous timeout
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        // Set new timeout to stop typing after 2 seconds
+        typingTimeoutRef.current = setTimeout(() => {
+            onTyping(false);
+        }, 2000);
     }
   };
 
@@ -104,7 +124,16 @@ export default function ChatInput({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
+    
+    // Clear typing status immediately on send
     update(ref(database, `status/${auth.currentUser.uid}`), { typingIn: null });
+    
+    // Clear new typing indicator
+    if (onTyping) {
+        onTyping(false);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    }
+
     onSendMessage(newMessage);
     setNewMessage("");
   };
@@ -118,7 +147,7 @@ export default function ChatInput({
       <AttachmentMenu 
         isOpen={showMenu} 
         onClose={() => setShowMenu(false)} 
-        onSelect={onUploadFile} // Pass the handler
+        onSelect={onUploadFile} 
       />
 
       {replyTo && (
@@ -177,7 +206,7 @@ export default function ChatInput({
                 className="flex-1 bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400"
                 placeholder={editingMessage ? "Update..." : "Type a message..."}
                 value={newMessage}
-                onChange={handleTyping}
+                onChange={handleTyping} // Uses updated handler
              />
           )}
           

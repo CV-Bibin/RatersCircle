@@ -7,16 +7,16 @@ import AnimeDP from "../images/AnimeDP";
 export default function MessageItem({ 
   msg, currentUser, userData, isManager, isFirstLevelRater, groupMembers, userProfiles,
   onPin, onReply, onReact, onDelete, onEdit, onVote, onReveal, onForward, onReplyClick,
-  onStar, isStarred, searchTerm 
+  onStar, isStarred, searchTerm,
+  // NEW PROPS FOR GROUPING
+  isSequence, 
+  showAvatar
 }) {
   const [showReactionMenu, setShowReactionMenu] = useState(false);
   
-  // --- ROLES & PERMISSIONS ---
   const isMe = msg.senderId === currentUser.uid;
   const isDeleted = msg.isDeleted;
   const myRole = userData?.role;
-  
-  // CRITICAL: Ensure Admin Role is detected correctly
   const isAdmin = myRole === 'admin'; 
 
   const senderLiveProfile = userProfiles ? userProfiles[msg.senderId] : null;
@@ -24,12 +24,10 @@ export default function MessageItem({
   const currentRole = isMe ? (userData?.role) : (senderLiveProfile?.role || msg.senderRole);
 
   const canDelete = isMe || isManager;
-  
-const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
-  // Admin sees edit history even if message is active
+  // Allow editing if type is 'text' OR if type is missing (legacy messages)
+  const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
   const showEditHistory = isAdmin && msg.editHistory; 
 
-  // --- HELPER: Highlight Search Text ---
   const highlightText = (text, term) => {
     if (!text) return "";
     if (!term) return text;
@@ -41,17 +39,14 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
     );
   };
 
-  // --- DOWNLOAD LOGIC ---
   const handleDownload = async (e) => {
     e.stopPropagation();
     if (msg.isUploading) return;
-
     if (msg.type === 'image' && !msg.fileName?.toLowerCase().endsWith('.pdf')) {
         const url = msg.mediaUrl.replace('/upload/', '/upload/fl_attachment/');
         window.open(url, '_blank');
         return;
     }
-
     try {
         const response = await fetch(msg.mediaUrl);
         if (!response.ok) throw new Error("Network error");
@@ -99,23 +94,24 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
 
   const reactions = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥'];
 
-  // --- ACTIONS MENU ---
   const renderActionsMenu = () => (
     !isDeleted && !msg.isUploading && (
         <div className={`absolute -top-8 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-[60] bg-white/95 backdrop-blur shadow-md border border-gray-100 rounded-full px-2 py-1`}>
             <button onClick={() => onStar(msg)} className="p-1.5 hover:scale-110 transition"><Star size={14} fill={isStarred ? "gold" : "none"} className={isStarred ? "text-yellow-500" : "text-gray-400"} /></button>
             <button onClick={() => onForward(msg)} className="p-1.5 text-gray-400 hover:text-purple-500 transition"><Share size={14} /></button>
             {canDelete && <button onClick={() => onDelete(msg)} className="p-1.5 text-gray-400 hover:text-red-500 transition"><Trash2 size={14} /></button>}
-           {/* EDIT BUTTON */}
-{canEdit && (
-    <button 
-        onClick={() => onEdit(msg)} 
-        className="p-1.5 text-gray-400 hover:text-green-500 transition"
-        title="Edit Message"
-    >
-        <Edit2 size={14} />
-    </button>
-)}
+            
+            {/* EDIT BUTTON */}
+            {canEdit && (
+                <button 
+                    onClick={() => onEdit(msg)} 
+                    className="p-1.5 text-gray-400 hover:text-green-500 transition"
+                    title="Edit Message"
+                >
+                    <Edit2 size={14} />
+                </button>
+            )}
+
             {isManager && <button onClick={() => onPin(msg)} className="p-1.5 text-gray-400 hover:text-yellow-500 transition"><Pin size={14} /></button>}
             {msg.type !== 'poll' && <button onClick={() => onReply(msg)} className="p-1.5 text-gray-400 hover:text-blue-500 transition"><Reply size={14} /></button>}
             <div className="w-px h-3 bg-gray-300 mx-1"></div>
@@ -143,14 +139,11 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
     )
   );
 
-  // --- REUSABLE: DELETED MESSAGE BUBBLE ---
   const renderDeletedBubble = (originalContent = null) => (
     <div className="flex flex-col">
         <p className="text-xs flex items-center gap-1 text-gray-500 italic">
             <Trash2 size={12} /> {msg.deletedByRole === 'admin' ? "Deleted by Admin" : "Message deleted"}
         </p>
-        
-        {/* If Admin and Original Content exists, show it */}
         {isAdmin && originalContent && (
             <div className="mt-2 pt-2 border-t border-red-100 text-left">
                 <p className="text-[10px] font-bold text-red-500 mb-0.5 uppercase tracking-wide">Admin View:</p>
@@ -160,23 +153,13 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
     </div>
   );
 
-  // --- CORE RENDER LOGIC (Separated for stability) ---
   const renderMessageContent = () => {
-    
-    // 1. POLL (Always Visible)
-  // 1. POLL
     if (msg.type === 'poll') {
-        // If deleted, show the deleted bubble, NOT the poll
-        if (isDeleted) {
-            return renderDeletedBubble();
-        }
+        if (isDeleted) return renderDeletedBubble();
         return <PollMessage msg={msg} currentUser={currentUser} onVote={onVote} onReveal={onReveal} />;
     }
-
-    // 2. AUDIO (Admin Sees Deleted)
     if (msg.type === 'audio') {
         if (isDeleted) {
-            // ADMIN gets to see deleted Audio
             if (isAdmin) {
                 return renderDeletedBubble(
                     <div className="opacity-70 scale-95 origin-left">
@@ -184,21 +167,12 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
                     </div>
                 );
             }
-            // User sees plain deleted bubble
             return renderDeletedBubble();
         }
-        // Not deleted
         return <VoiceMessage msg={msg} isMe={isMe} nameTextColor={getRoleTextColor(currentRole)} canSeeDeletedContent={false} />;
     }
-
-    // 3. MEDIA (Image / Video / File)
     if (['image', 'video', 'file'].includes(msg.type)) {
-        // If deleted, HIDE for everyone (Including Admin). 
-        // Admin DOES NOT see the file.
-        if (isDeleted) {
-            return renderDeletedBubble(null); // Passing null ensures no content is shown
-        }
-
+        if (isDeleted) return renderDeletedBubble(null); 
         const containerBorder = isMe ? "border-blue-200" : "border-gray-100";
         const footerBg = isMe ? "bg-blue-600" : "bg-white";
         const footerTextMain = isMe ? "text-white" : "text-gray-800";
@@ -207,12 +181,11 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
 
         return (
            <div className={`relative rounded-2xl overflow-hidden shadow-sm border ${containerBorder} bg-gray-50`}>
-              {!isMe && (
+              {!isMe && showAvatar && (
                 <div className="px-3 pt-2 pb-1 bg-white border-b border-gray-100">
                     <p className={`text-[11px] font-bold ${getRoleTextColor(currentRole)}`}>{displayName}</p>
                 </div>
               )}
-
               {(msg.type === 'image' || msg.type === 'video') && (
                   <div className="relative bg-gray-100 flex items-center justify-center min-h-[120px]">
                     {msg.isUploading ? (
@@ -228,7 +201,6 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
                     )}
                   </div>
               )}
-
               <div className={`p-3 flex items-center gap-3 ${footerBg}`}>
                   <div className={`p-2 rounded-lg shrink-0 ${footerIconBg}`}>
                      {msg.isUploading ? <Loader2 size={20} className="animate-spin" /> : (msg.type === 'image' ? <FileText size={20} /> : msg.type === 'video' ? <Play size={20} /> : <File size={20} />)}
@@ -252,18 +224,13 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
         );
     }
 
-    // 4. TEXT (Default)
     if (isDeleted) {
-        // ADMIN gets to see deleted Text
         if (isAdmin) {
-            return renderDeletedBubble(
-                <div className="text-sm text-red-600 font-medium">{msg.text || "[No Text Data]"}</div>
-            );
+            return renderDeletedBubble(<div className="text-sm text-red-600 font-medium">{msg.text || "[No Text Data]"}</div>);
         }
         return renderDeletedBubble();
     }
 
-    // Normal Text Render
     return (
         <div className="flex flex-col">
             <p className="text-sm leading-relaxed">{highlightText(msg.text, searchTerm)}</p>
@@ -274,18 +241,32 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
                 {isMe && <div className="ml-1 translate-y-[1px]">{getStatusIcon()}</div>}
             </div>
             {showEditHistory && (
-                <div className="mt-3 pt-2 border-t border-black/10 text-left">
-                    <p className="text-[9px] font-bold text-gray-500 mb-1">Edit History (Admin):</p>
-                    {Object.entries(msg.editHistory).map(([ts, t]) => <div key={ts} className="text-[9px] text-gray-400 line-through">{t}</div>)}
+                // CONTRAST FIX: If isMe (blue bubble), use white/70 text. Else use gray-500.
+                <div className={`mt-3 pt-2 border-t text-left ${isMe ? 'border-white/20' : 'border-black/10'}`}>
+                    <p className={`text-[9px] font-bold mb-1 ${isMe ? 'text-white/80' : 'text-gray-500'}`}>Edit History (Admin):</p>
+                    {Object.entries(msg.editHistory).map(([ts, t]) => <div key={ts} className={`text-[9px] line-through ${isMe ? 'text-white/60' : 'text-gray-400'}`}>{t}</div>)}
                 </div>
             )}
         </div>
     );
   };
 
+  // --- MESSAGE GROUPING ADJUSTMENTS ---
+  // If part of sequence, reduce top margin to 1 (mb-1), else standard (mb-6)
+  const marginClass = isSequence ? 'mb-1' : 'mb-6';
+
   return (
-    <div id={msg.id} className={`flex gap-3 mb-6 group ${isMe ? 'flex-row-reverse' : ''} relative scroll-mt-32`}>
-      <div className="shrink-0"><AnimeDP seed={msg.senderEmail || msg.senderId} role={currentRole} size={45} xp={currentXP} /></div>
+    <div id={msg.id} className={`flex gap-3 ${marginClass} group ${isMe ? 'flex-row-reverse' : ''} relative scroll-mt-32`}>
+      
+      {/* AVATAR: Only show if showAvatar is true */}
+      <div className="shrink-0 w-[45px]">
+          {showAvatar ? (
+             <AnimeDP seed={msg.senderEmail || msg.senderId} role={currentRole} size={45} xp={currentXP} />
+          ) : (
+             // Placeholder to keep alignment
+             <div className="w-[45px]" /> 
+          )}
+      </div>
 
       <div className="max-w-[80%] md:max-w-[60%] relative">
         <div className="relative">
@@ -296,13 +277,15 @@ const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
               </div>
             )}
 
-            {/* Render Content */}
-            {/* If it's a media card (and not deleted), render directly. Otherwise wrap in bubble. */}
+            {/* Content Wrapper */}
             {(['image', 'video', 'file'].includes(msg.type) && !isDeleted) ? (
                 renderMessageContent()
             ) : (
                 <div className={`relative p-4 shadow-sm break-words ${isDeleted ? 'bg-gray-100 border border-gray-200 text-gray-400 rounded-2xl italic' : isMe ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'bg-white text-gray-800 rounded-2xl rounded-tl-sm'}`}>
-                    {!isMe && !isDeleted && <p className={`text-[11px] mb-1 font-bold ${getRoleTextColor(currentRole)}`}>{displayName}</p>}
+                    {/* Only show Name Header if NOT Me, NOT Deleted, AND it is the First in sequence */}
+                    {!isMe && !isDeleted && showAvatar && (
+                        <p className={`text-[11px] mb-1 font-bold ${getRoleTextColor(currentRole)}`}>{displayName}</p>
+                    )}
                     {renderMessageContent()}
                 </div>
             )}

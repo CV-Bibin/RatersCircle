@@ -141,7 +141,7 @@ export default function SidebarLeft({ onSelectGroup, user, userData }) {
   const onlineUsers = visibleUsers.filter(u => userStatuses[u.id]?.state === 'online').length;
 
   return (
-    <div className="bg-white h-full rounded-3xl shadow-2xl flex flex-col overflow-hidden relative border border-gray-100">
+    <div className="bg-white/80 backdrop-blur-md h-full rounded-3xl shadow-2xl flex flex-col overflow-hidden relative border border-white/50">
       
       {/* Header & Search */}
       <SidebarHeader 

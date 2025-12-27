@@ -4,12 +4,10 @@ import MessageItem from './chat/MessageItem';
 import CreatePollModal from './chat/CreatePollModal';
 import ForwardModal from './chat/ForwardModal';
 import DeleteModal from './chat/DeleteModal';
-// 1. NEW: Import MembersModal
 import MembersModal from './MembersModal'; 
+import ThemePicker, { THEMES, DOODLE_PATTERN } from './chat/ThemePicker'; // NEW IMPORT
 import useChatLogic from '../hooks/useChatLogic';
-// 2. NEW: Import Trash2 and Users icons
-import { Lock, Unlock, Pin, X, AlertCircle, CheckCircle2, Search, Star, ArrowDown, Trash2, Users } from 'lucide-react'; 
-// 3. NEW: Import Database functions for Deleting Group
+import { Lock, Unlock, Pin, X, AlertCircle, CheckCircle2, Search, Star, ArrowDown, Trash2, Users, Palette } from 'lucide-react'; 
 import { database } from '../firebase';
 import { ref, remove } from 'firebase/database';
 
@@ -23,21 +21,27 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
     handleCreatePoll, 
     handleVote, handleReveal, handleReaction, handleDeleteClick, confirmDeleteAction, handleForwardAction,
     handlePin, handleUnpin, toggleRestriction, handleStarMessage,
+    typingUsers,       
+  handleTypingStatus, 
     lastViewed, unreadCount, markAsRead
   } = useChatLogic(activeGroup, currentUser, userData);
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   
-  // --- UI STATE ---
   const [toast, setToast] = useState(null); 
   const [isSearching, setIsSearching] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
-  
-  // 4. NEW: State for Members Modal
   const [showMembers, setShowMembers] = useState(false);
+
+  // --- NEW: THEME STATE ---
+  const [currentTheme, setCurrentTheme] = useState('default');
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  
+  // Rater Logic
+  const isRater = userData?.role === 'rater';
 
   useEffect(() => {
     if (toast) {
@@ -48,7 +52,6 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
 
   const showToast = (message, type = 'error') => setToast({ message, type });
 
-  // 5. NEW: Handle Delete Group Logic
   const handleDeleteGroup = async () => {
     if (!window.confirm("ARE YOU SURE? This will permanently delete this group and all messages.")) return;
     if (!window.confirm("This action cannot be undone. Delete group?")) return;
@@ -62,7 +65,6 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
     }
   };
 
-  // --- SMART SCROLL LOGIC ---
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
@@ -103,7 +105,6 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
       setShowPollModal(false);
   };
 
-  // --- FILTER & DIVIDER LOGIC ---
   const renderMessages = () => {
     let hasShownUnreadSeparator = false;
 
@@ -117,11 +118,11 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
 
     if (filtered.length === 0) {
          return (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
-                <div className="p-4 bg-gray-100 rounded-full">
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3 relative z-10">
+                <div className="p-4 bg-white/50 backdrop-blur rounded-full shadow-sm">
                     {showStarredOnly ? <Star size={32} /> : <Search size={32} />}
                 </div>
-                <p className="text-sm font-medium">
+                <p className="text-sm font-medium bg-white/50 px-3 py-1 rounded-full">
                     {showStarredOnly ? "No starred messages found." : (searchTerm ? `No results for "${searchTerm}"` : "No messages yet.")}
                 </p>
             </div>
@@ -136,6 +137,17 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
                 hasShownUnreadSeparator = true;
             }
         }
+
+        // --- NEW: MESSAGE GROUPING LOGIC ---
+        // 1. Get previous message
+        const prevMsg = index > 0 ? filtered[index - 1] : null;
+        
+        // 2. Check if current message should be grouped with previous
+        // Conditions: Same Sender, Previous msg exists, No "Unread Divider" between them
+        const isSequence = prevMsg && prevMsg.senderId === msg.senderId && !showDivider;
+        
+        // 3. We only show the Avatar/Name for the FIRST message in a sequence
+        const showAvatar = !isSequence;
 
         return (
             <React.Fragment key={msg.id}>
@@ -158,7 +170,7 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
                     onReply={setReplyTo}
                     onReact={handleReaction}
                     onDelete={handleDeleteClick}
-                    onEdit={setEditingMessage}
+                    onEdit={setEditingMessage} 
                     onVote={handleVote}
                     onReveal={handleReveal}
                     onForward={setMsgToForward}
@@ -166,6 +178,9 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
                     onStar={handleStarMessage}
                     isStarred={starredMessages && starredMessages[msg.id]}
                     searchTerm={searchTerm} 
+                    // PASS GROUPING PROPS
+                    isSequence={isSequence}
+                    showAvatar={showAvatar}
                 />
             </React.Fragment>
         );
@@ -180,20 +195,27 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
   );
 
   return (
-    <div className="flex flex-col h-full bg-[#E3F2FD] relative overflow-hidden rounded-3xl shadow-xl border border-white/50">
+    // NEW: Apply Theme Background + Transition
+    <div className={`flex flex-col h-full ${THEMES[currentTheme].bg} relative overflow-hidden rounded-3xl shadow-xl border border-white/50 transition-colors duration-500`}>
       
-      {/* 6. NEW: Members Modal Component */}
-      <MembersModal 
-        isOpen={showMembers} 
-        onClose={() => setShowMembers(false)}
-        activeGroup={activeGroup}
-        currentUser={currentUser}
-        userProfiles={userProfiles}
-        isManager={isManager}
-        userData={userData}
-      />
+      {/* NEW: Doodle Background Pattern */}
+      <div 
+         className={`absolute inset-0 pointer-events-none ${THEMES[currentTheme].pattern}`} 
+         style={{ backgroundImage: DOODLE_PATTERN, backgroundSize: '120px' }}
+      ></div>
 
-      {/* Toast */}
+      {!isRater && (
+        <MembersModal 
+            isOpen={showMembers} 
+            onClose={() => setShowMembers(false)}
+            activeGroup={activeGroup}
+            currentUser={currentUser}
+            userProfiles={userProfiles}
+            isManager={isManager}
+            userData={userData} 
+        />
+      )}
+
       {toast && (
         <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold animate-in slide-in-from-top-2 fade-in duration-300 ${toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
             {toast.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
@@ -201,24 +223,26 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
         </div>
       )}
 
-      {/* --- HEADER --- */}
-      <div className="bg-white/90 backdrop-blur-md px-4 py-3 flex justify-between items-center shadow-sm z-30 border-b border-gray-100 relative h-16">
+      {/* HEADER: Updated with Glassmorphism (bg-white/80 backdrop-blur-md) */}
+      <div className="bg-white/80 backdrop-blur-md px-4 py-3 flex justify-between items-center shadow-sm z-30 border-b border-gray-100 relative h-16 transition-all">
         <div className="flex-1 relative h-full flex items-center overflow-hidden">
-            {/* 7. UPDATE: Added onClick to Title Wrapper to open Members List */}
             <div 
-                onClick={() => setShowMembers(true)}
-                className={`absolute left-0 w-full transition-all duration-300 ease-in-out transform cursor-pointer ${isSearching ? 'translate-y-12 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
+                onClick={() => !isRater && setShowMembers(true)}
+                className={`absolute left-0 w-full transition-all duration-300 ease-in-out transform ${!isRater ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${isSearching ? 'translate-y-12 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
             >
-                <h2 className="font-bold text-gray-800 text-lg leading-tight truncate hover:text-blue-600 transition-colors">{activeGroup.name}</h2>
+                <h2 className="font-bold text-gray-800 text-lg leading-tight truncate">{activeGroup.name}</h2>
                 <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
-                    <span className="text-green-600 font-medium">{Object.keys(activeGroup.members || {}).length} members</span>
-                    <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                    {!isRater && (
+                        <>
+                            <span className="text-green-600 font-medium">{Object.keys(activeGroup.members || {}).length} members</span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                        </>
+                    )}
                     <span>{messages.length} messages</span>
                     {isRestricted && <span className="text-red-600 bg-red-50 px-2 rounded-full border border-red-100 font-bold text-[10px] uppercase">Restricted</span>}
                 </div>
             </div>
 
-            {/* Search Input Wrapper */}
             <div className={`absolute left-0 w-full transition-all duration-300 ease-in-out transform ${isSearching ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 pointer-events-none'}`}>
                 <div className="relative w-full max-w-lg">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -234,18 +258,36 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
             </div>
         </div>
 
-        {/* RIGHT SIDE ACTIONS */}
-        <div className="flex items-center gap-1 ml-3 shrink-0">
+        <div className="flex items-center gap-2 ml-4 shrink-0">
             {!isSearching && <button onClick={() => setIsSearching(true)} className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition active:scale-95"><Search size={20} /></button>}
             
-            {/* 8. NEW: Members Button */}
-            <button 
-                onClick={() => setShowMembers(true)}
-                className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition active:scale-95 hidden md:block"
-                title="View Members"
-            >
-                <Users size={20} />
-            </button>
+            {!isRater && (
+                <button 
+                    onClick={() => setShowMembers(true)}
+                    className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition active:scale-95 hidden md:block"
+                    title="View Members"
+                >
+                    <Users size={20} />
+                </button>
+            )}
+
+            {/* NEW: THEME PICKER BUTTON */}
+            <div className="relative">
+                <button 
+                    onClick={() => setShowThemePicker(!showThemePicker)} 
+                    className={`p-2.5 rounded-full transition active:scale-95 ${showThemePicker ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'}`}
+                >
+                    <Palette size={20} />
+                </button>
+                
+                {/* Theme Component */}
+                <ThemePicker 
+                    isOpen={showThemePicker} 
+                    onClose={() => setShowThemePicker(false)}
+                    currentTheme={currentTheme}
+                    onSelectTheme={(theme) => { setCurrentTheme(theme); setShowThemePicker(false); }}
+                />
+            </div>
 
             <button onClick={() => setShowStarredOnly(!showStarredOnly)} className={`p-2.5 rounded-full transition active:scale-95 ${showStarredOnly ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-gray-100 text-gray-400'}`}><Star size={20} fill={showStarredOnly ? "currentColor" : "none"} /></button>
             
@@ -263,7 +305,6 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
                 </button>
             )}
 
-            {/* 9. NEW: Delete Group Button (Admin Only) */}
             {userData?.role === 'admin' && (
                 <button 
                     onClick={handleDeleteGroup}
@@ -276,9 +317,8 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
         </div>
       </div>
 
-      {/* PINNED BANNER */}
       {pinnedMessage && !showStarredOnly && !searchTerm && (
-        <div onClick={() => scrollToMessage(pinnedMessage.id)} className="bg-white/80 backdrop-blur border-b border-gray-100 px-4 py-2 flex justify-between items-center cursor-pointer hover:bg-white transition z-20 shadow-sm">
+        <div onClick={() => scrollToMessage(pinnedMessage.id)} className="bg-gradient-to-r from-blue-50/95 to-white/90 backdrop-blur-md border-b border-blue-100 border-l-4 border-l-blue-500 px-4 py-2 flex justify-between items-center cursor-pointer hover:from-blue-100/90 hover:to-white transition-all z-20 shadow-sm">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><Pin size={14} fill="currentColor" /></div>
             <div className="flex flex-col overflow-hidden">
@@ -290,17 +330,16 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
         </div>
       )}
 
-      {/* MESSAGES AREA */}
+      {/* MESSAGES AREA (Z-Index ensures messages float above doodle pattern) */}
       <div 
         ref={chatContainerRef} 
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+        className="flex-1 overflow-y-auto p-4 scroll-smooth relative z-10"
       >
         {renderMessages()}
         <div ref={messagesEndRef} className="h-2" />
       </div>
 
-      {/* --- NEW MSG BUBBLE (FLOATING) --- */}
       {showScrollBottom && (
          <button 
             onClick={scrollToBottom}
@@ -315,7 +354,21 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
          </button>
       )}
 
-      {/* INPUT */}
+      {/* TYPING INDICATOR BUBBLE */}
+{typingUsers.length > 0 && (
+<div className="absolute bottom-28 left-6 z-50 bg-white/90 backdrop-blur border border-gray-200 px-3 py-1.5 rounded-full shadow-sm flex items-center gap-2 animate-in slide-in-from-bottom-2">        <div className="flex gap-0.5 mt-1">
+            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+        </div>
+        <span className="text-xs font-medium text-gray-500">
+            {typingUsers.length > 2 
+                ? "Several people are typing..." 
+                : `${typingUsers.join(", ")} ${typingUsers.length === 1 ? "is" : "are"} typing...`}
+        </span>
+    </div>
+)}
+
       <ChatInput 
         onSendMessage={handleSendMessage} 
         onSendAudio={handleSendAudio}
@@ -328,9 +381,9 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
         isRestricted={isRestricted}
         isManager={isManager}
         activeGroupId={activeGroup.id}
+        onTyping={handleTypingStatus}
       />
 
-      {/* MODALS */}
       <CreatePollModal 
         isOpen={showPollModal} 
         onClose={() => setShowPollModal(false)} 

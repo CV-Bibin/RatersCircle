@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 // 1. IMPORT DATABASE ONLY (Removed Storage imports)
 import { database } from '../firebase';
-import { ref, push, set, update, remove, get, onValue, runTransaction, serverTimestamp } from 'firebase/database';
+import { ref, push, set, update, remove, get, onValue, runTransaction, serverTimestamp, onDisconnect } from 'firebase/database';
 import useChatData from './useChatData'; 
 import useMessageActions from './useMessageActions';
 import useInteractionLogic from './useInteractionLogic';
@@ -11,6 +11,9 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
   const { messages, userProfiles, pinnedMessage, isRestricted } = useChatData(activeGroup, currentUser);
   const [starredMessages, setStarredMessages] = useState({});
   
+  // 1. NEW: Typing Users State
+  const [typingUsers, setTypingUsers] = useState([]);
+
   const [lastViewed, setLastViewed] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const initialLoadRef = useRef(true);
@@ -148,6 +151,44 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
   };
 
   // =================================================================================
+  //  ⌨️ 3. TYPING INDICATOR LOGIC (NEW)
+  // =================================================================================
+
+  // Listener: Who is typing?
+  useEffect(() => {
+    if (!activeGroup?.id || !currentUser) return;
+    
+    const typingRef = ref(database, `groups/${activeGroup.id}/typing`);
+
+    const unsub = onValue(typingRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      // Get names of everyone typing EXCEPT me
+      const names = Object.entries(data)
+        .filter(([uid, _]) => uid !== currentUser.uid)
+        .map(([_, name]) => name);
+      setTypingUsers(names);
+    });
+
+    return () => unsub();
+  }, [activeGroup, currentUser]);
+
+  // Handler: Update my status
+  const handleTypingStatus = async (isTyping) => {
+    if (!activeGroup?.id || !currentUser) return;
+    
+    const myTypingRef = ref(database, `groups/${activeGroup.id}/typing/${currentUser.uid}`);
+    
+    if (isTyping) {
+        const name = userProfiles[currentUser.uid]?.displayName || currentUser.email?.split('@')[0] || "Member";
+        await set(myTypingRef, name);
+        // Ensure status is removed if internet disconnects
+        onDisconnect(myTypingRef).remove();
+    } else {
+        await remove(myTypingRef);
+    }
+  };
+
+  // =================================================================================
 
   // --- FETCH STARRED MESSAGES ---
   useEffect(() => {
@@ -188,6 +229,9 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
   };
 
   const onSendMessage = async (text) => {
+    // Stop typing when message is sent
+    handleTypingStatus(false);
+    
     const wasEdit = await handleSendMessage(text, replyTo, editingMessage);
     if (wasEdit) setEditingMessage(null);
     else setReplyTo(null);
@@ -220,6 +264,10 @@ export default function useChatLogic(activeGroup, currentUser, userData) {
     msgToDelete, setMsgToDelete, msgToForward, setMsgToForward,
     showPollModal, setShowPollModal,
     
+    // NEW: Return typing data and handler
+    typingUsers, 
+    handleTypingStatus,
+
     lastViewed, 
     unreadCount, 
     markAsRead: () => setUnreadCount(0),
