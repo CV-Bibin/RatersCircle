@@ -10,6 +10,8 @@ import useChatLogic from '../hooks/useChatLogic';
 import { Lock, Unlock, Pin, X, AlertCircle, CheckCircle2, Search, Star, ArrowDown, Trash2, Users, Palette } from 'lucide-react'; 
 import { database } from '../firebase';
 import { ref, remove } from 'firebase/database';
+import MeetingModal from './MeetingModal'; // <--- NEW IMPORT
+import { Video } from 'lucide-react'; // <--- Ensure Video icon is imported
 
 export default function ChatWindow({ activeGroup, currentUser, userData }) {
   const {
@@ -28,6 +30,8 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
+
+  const [showMeeting, setShowMeeting] = useState(false); // <--- Add this
   
   const [toast, setToast] = useState(null); 
   const [isSearching, setIsSearching] = useState(false);
@@ -214,7 +218,17 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
             isManager={isManager}
             userData={userData} 
         />
+        
       )}
+
+      {/* MEETING MODAL (Separate Section) */}
+<MeetingModal 
+    isOpen={showMeeting}
+    onClose={() => setShowMeeting(false)}
+    groupId={activeGroup.id}
+    groupName={activeGroup.name}
+    currentUser={currentUser}
+/>
 
       {toast && (
         <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold animate-in slide-in-from-top-2 fade-in duration-300 ${toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
@@ -288,6 +302,15 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
                     onSelectTheme={(theme) => { setCurrentTheme(theme); setShowThemePicker(false); }}
                 />
             </div>
+
+            {/* VIDEO MEETING BUTTON */}
+<button 
+    onClick={() => setShowMeeting(true)}
+    className="p-2.5 hover:bg-blue-50 text-gray-600 hover:text-blue-600 rounded-full transition active:scale-95 hidden md:block"
+    title="Start Voice/Video Meeting"
+>
+    <Video size={20} />
+</button>
 
             <button onClick={() => setShowStarredOnly(!showStarredOnly)} className={`p-2.5 rounded-full transition active:scale-95 ${showStarredOnly ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-gray-100 text-gray-400'}`}><Star size={20} fill={showStarredOnly ? "currentColor" : "none"} /></button>
             
