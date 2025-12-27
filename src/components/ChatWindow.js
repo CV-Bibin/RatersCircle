@@ -190,6 +190,7 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
         currentUser={currentUser}
         userProfiles={userProfiles}
         isManager={isManager}
+        userData={userData}
       />
 
       {/* Toast */}

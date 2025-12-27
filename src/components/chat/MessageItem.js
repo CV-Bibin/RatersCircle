@@ -24,7 +24,8 @@ export default function MessageItem({
   const currentRole = isMe ? (userData?.role) : (senderLiveProfile?.role || msg.senderRole);
 
   const canDelete = isMe || isManager;
-  const canEdit = isMe && !isDeleted && msg.type === 'text';
+  
+const canEdit = isMe && !isDeleted && (msg.type === 'text' || !msg.type);
   // Admin sees edit history even if message is active
   const showEditHistory = isAdmin && msg.editHistory; 
 
@@ -105,7 +106,16 @@ export default function MessageItem({
             <button onClick={() => onStar(msg)} className="p-1.5 hover:scale-110 transition"><Star size={14} fill={isStarred ? "gold" : "none"} className={isStarred ? "text-yellow-500" : "text-gray-400"} /></button>
             <button onClick={() => onForward(msg)} className="p-1.5 text-gray-400 hover:text-purple-500 transition"><Share size={14} /></button>
             {canDelete && <button onClick={() => onDelete(msg)} className="p-1.5 text-gray-400 hover:text-red-500 transition"><Trash2 size={14} /></button>}
-            {canEdit && <button onClick={() => onEdit(msg)} className="p-1.5 text-gray-400 hover:text-green-500 transition"><Edit2 size={14} /></button>}
+           {/* EDIT BUTTON */}
+{canEdit && (
+    <button 
+        onClick={() => onEdit(msg)} 
+        className="p-1.5 text-gray-400 hover:text-green-500 transition"
+        title="Edit Message"
+    >
+        <Edit2 size={14} />
+    </button>
+)}
             {isManager && <button onClick={() => onPin(msg)} className="p-1.5 text-gray-400 hover:text-yellow-500 transition"><Pin size={14} /></button>}
             {msg.type !== 'poll' && <button onClick={() => onReply(msg)} className="p-1.5 text-gray-400 hover:text-blue-500 transition"><Reply size={14} /></button>}
             <div className="w-px h-3 bg-gray-300 mx-1"></div>

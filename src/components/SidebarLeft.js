@@ -34,9 +34,15 @@ export default function SidebarLeft({ onSelectGroup, user, userData }) {
   const isCoAdmin = role === 'co_admin';
   const isLeader = role === 'leader' || role === 'group_leader';
   
-  const canManageGroups = isAdmin || isAssistantAdmin || isCoAdmin || isLeader;
+  // 1. UPDATE: Separated "Management" from "Viewing"
+  // Leaders can VIEW the directory, but CANNOT add members or create groups.
+  const canManageGroups = isAdmin || isAssistantAdmin || isCoAdmin; 
+  
+  // Leaders can still see the User List (Directory)
+  const canSeeUserList = isAdmin || isAssistantAdmin || isCoAdmin || isLeader;
+
+  // Raters see NOTHING (Neither manage groups nor see user list)
   const canSeeAllGroups = isAdmin || isAssistantAdmin;
-  const canSeeUserList = canManageGroups;
 
   // --- 1. Fetch Groups & Last Viewed Data ---
   useEffect(() => {
@@ -91,7 +97,7 @@ export default function SidebarLeft({ onSelectGroup, user, userData }) {
 
   // --- 3. Fetch Users ---
   useEffect(() => {
-    if (!canSeeUserList) return;
+    if (!canSeeUserList) return; // Raters will stop here
     const usersRef = ref(database, 'users');
     return onValue(usersRef, (snapshot) => {
       const data = snapshot.val();
@@ -149,7 +155,7 @@ export default function SidebarLeft({ onSelectGroup, user, userData }) {
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200">
         
-        {/* New Group Button */}
+        {/* New Group Button (Only for Admins/Co-Admins - Hidden for Leaders & Raters) */}
         {canManageGroups && (
           <div className="px-3 mt-4 mb-2">
             <button 
@@ -164,18 +170,18 @@ export default function SidebarLeft({ onSelectGroup, user, userData }) {
           </div>
         )}
 
-        {/* Group List */}
+        {/* Group List (Passes canManageGroups to control Add Member button) */}
         <GroupList 
             groups={displayedGroups}
             onSelectGroup={handleGroupSelect}
             activeGroupId={activeGroupId}
             userStatuses={userStatuses}
             unreadCounts={unreadCounts} 
-            canManageGroups={canManageGroups}
+            canManageGroups={canManageGroups} // Leaders are false here, so no "+" button
             onAddMemberClick={(group) => { setSelectedGroupForAdd(group); setShowAddMemberModal(true); }}
         />
 
-        {/* Users Section (With Online Status Header) */}
+        {/* Users Section (Hidden for Raters) */}
         {canSeeUserList && (
           <div>
              <div className="flex items-center justify-between px-4 mb-2 mt-6">
@@ -185,7 +191,6 @@ export default function SidebarLeft({ onSelectGroup, user, userData }) {
                         {isAdmin || isAssistantAdmin ? "Directory" : "Members"}
                     </h3>
                 </div>
-                {/* --- RESTORED STATUS --- */}
                 <div className="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                     <span className="text-green-500 font-bold">{onlineUsers}</span> Online / {totalUsers}
                 </div>

@@ -1,20 +1,35 @@
 import React from 'react';
-import { X, Trash2, Shield, User } from 'lucide-react';
+import { X, Trash2, User } from 'lucide-react';
 import { database } from '../firebase';
 import { ref, remove } from 'firebase/database';
 
-export default function MembersModal({ activeGroup, isOpen, onClose, currentUser, userProfiles, isManager }) {
+export default function MembersModal({ activeGroup, isOpen, onClose, currentUser, userProfiles, isManager, userData }) {
   if (!isOpen || !activeGroup) return null;
 
   // Convert members object to array
   const memberIds = activeGroup.members ? Object.keys(activeGroup.members) : [];
+
+  // --- HELPER: Role Hierarchy Levels ---
+  const getRoleLevel = (role) => {
+    switch (role) {
+      case 'admin': return 100;
+      case 'co_admin': return 90;
+      case 'assistant_admin': return 80;
+      case 'leader': return 50;
+      case 'group_leader': return 50;
+      case 'rater': return 10;
+      default: return 0; // Member
+    }
+  };
+
+  // Calculate my level once
+  const myRoleLevel = getRoleLevel(userData?.role);
 
   const handleRemoveUser = async (userId) => {
     if (!window.confirm("Remove this user from the group?")) return;
     try {
       // Remove user from the group's member list
       await remove(ref(database, `groups/${activeGroup.id}/members/${userId}`));
-      alert("User removed.");
     } catch (error) {
       console.error("Error removing user:", error);
       alert("Failed to remove user.");
@@ -43,8 +58,14 @@ export default function MembersModal({ activeGroup, isOpen, onClose, currentUser
             const role = profile.role || "member";
             const isMe = uid === currentUser.uid;
             
-            // Only Managers/Admins can remove people (but can't remove themselves here)
-            const canRemove = isManager && !isMe; 
+            // --- HIERARCHY CHECK ---
+            const targetRoleLevel = getRoleLevel(role);
+            
+            // Rules for removal:
+            // 1. Must be a Manager/Admin
+            // 2. Cannot remove yourself
+            // 3. My Level must be HIGHER than their Level (e.g. Leader cannot remove Admin)
+            const canRemove = isManager && !isMe && (myRoleLevel > targetRoleLevel);
 
             return (
               <div key={uid} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition">
