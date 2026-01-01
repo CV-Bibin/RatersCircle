@@ -50,17 +50,24 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
     return false;
   };
 
-  // --- FIXED UPLOAD LOGIC ---
+  // --- FIXED & SMART UPLOAD LOGIC ---
   const handleFileUpload = async (file, category = 'file') => {
     if (!file) return;
+
+    // ✅ SMART AUTO-DETECTION
+    // Even if 'category' says "file", we check if it is actually an image/video.
+    let smartType = category;
+    if (smartType === 'file') {
+        if (file.type && file.type.startsWith('image/')) smartType = 'image';
+        if (file.type && file.type.startsWith('video/')) smartType = 'video';
+    }
 
     const chatRef = ref(database, `groups/${activeGroup.id}/messages`);
     const newMsgRef = push(chatRef);
     
-    let tempType = category;
-
+    // Use smartType for the initial "Uploading..." bubble
     await set(newMsgRef, {
-        type: tempType,
+        type: smartType, 
         isUploading: true, 
         fileName: file.name,
         fileSize: "Uploading...",
@@ -84,19 +91,18 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
         const data = await res.json();
 
         if (res.ok && data.secure_url) {
-            let finalType = category; 
+            let finalType = smartType; 
             
-            // Auto-detect PDF sent as image
-            if (category === 'image' && file.name.toLowerCase().endsWith('.pdf')) finalType = 'file';
+            // Safety Check: If a PDF was somehow marked as image, force it back to file
+            if (finalType === 'image' && file.name.toLowerCase().endsWith('.pdf')) finalType = 'file';
 
             const fileSize = (file.size / (1024 * 1024));
             const sizeStr = fileSize < 1 ? (file.size / 1024).toFixed(0) + " KB" : fileSize.toFixed(2) + " MB";
 
             await update(newMsgRef, {
                 mediaUrl: data.secure_url,
-                // CRITICAL: Save resource type (raw/image/video) to fix PDF downloads
                 resourceType: data.resource_type || 'auto', 
-                type: finalType,
+                type: finalType, // ✅ Shows as Photo if it is one!
                 fileSize: sizeStr,
                 isUploading: null 
             });

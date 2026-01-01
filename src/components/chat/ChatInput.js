@@ -7,6 +7,7 @@ import AttachmentMenu from './AttachmentMenu';
 // 2. UPDATE: Import StickerPicker
 import StickerPicker from './StickerPicker';
 
+
 export default function ChatInput({ 
   onSendMessage, isRestricted, isManager, 
   onTyping, 
@@ -31,6 +32,8 @@ export default function ChatInput({
   const streamRef = useRef(null);
 
   const typingTimeoutRef = useRef(null);
+
+  
 
   const canCreatePoll = isManager || userXP >= 500; 
 
