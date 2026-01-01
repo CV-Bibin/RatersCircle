@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Lock, X, Edit2, BarChart2, Mic, Plus } from 'lucide-react';
+// 1. UPDATE: Added 'Smile' icon import
+import { Send, Lock, X, Edit2, BarChart2, Mic, Plus, Smile } from 'lucide-react';
 import { database, auth } from '../../firebase';
 import { ref, update } from 'firebase/database';
 import AttachmentMenu from './AttachmentMenu';
+// 2. UPDATE: Import StickerPicker
+import StickerPicker from './StickerPicker';
 
 export default function ChatInput({ 
   onSendMessage, isRestricted, isManager, 
-  onTyping, // <--- 1. NEW PROP RECEIVED HERE
+  onTyping, 
   replyTo, onCancelReply, 
   activeGroupId,
   editingMessage, onCancelEdit,
@@ -20,11 +23,13 @@ export default function ChatInput({
   const [isRecording, setIsRecording] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   
+  // 3. UPDATE: New State for Sticker Menu
+  const [showStickers, setShowStickers] = useState(false);
+  
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
 
-  // 2. NEW: Ref for debouncing the typing indicator
   const typingTimeoutRef = useRef(null);
 
   const canCreatePoll = isManager || userXP >= 500; 
@@ -70,9 +75,7 @@ export default function ChatInput({
     // B. Trigger New Group Typing Logic (Chat Window Indicator)
     if (onTyping) {
         onTyping(true);
-        // Clear previous timeout
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        // Set new timeout to stop typing after 2 seconds
         typingTimeoutRef.current = setTimeout(() => {
             onTyping(false);
         }, 2000);
@@ -125,10 +128,8 @@ export default function ChatInput({
     e.preventDefault();
     if (!newMessage.trim()) return;
     
-    // Clear typing status immediately on send
     update(ref(database, `status/${auth.currentUser.uid}`), { typingIn: null });
     
-    // Clear new typing indicator
     if (onTyping) {
         onTyping(false);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -148,6 +149,16 @@ export default function ChatInput({
         isOpen={showMenu} 
         onClose={() => setShowMenu(false)} 
         onSelect={onUploadFile} 
+      />
+
+      {/* --- 4. UPDATE: STICKER PICKER COMPONENT --- */}
+      <StickerPicker 
+        isOpen={showStickers} 
+        onClose={() => setShowStickers(false)} 
+        onSelect={(sticker) => {
+            onSendMessage(sticker); 
+            setShowStickers(false);
+        }} 
       />
 
       {replyTo && (
@@ -181,6 +192,15 @@ export default function ChatInput({
                     className={`p-2 rounded-full transition ${showMenu ? 'bg-blue-100 text-blue-600 rotate-45' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
                 >
                     <Plus size={24} />
+                </button>
+
+                {/* --- 5. UPDATE: STICKER BUTTON --- */}
+                <button 
+                    type="button" 
+                    onClick={() => setShowStickers(!showStickers)} 
+                    className={`p-2 rounded-full transition ${showStickers ? 'bg-yellow-100 text-yellow-600' : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'}`}
+                >
+                    <Smile size={24} />
                 </button>
 
                 {canCreatePoll && (

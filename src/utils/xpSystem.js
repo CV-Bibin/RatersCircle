@@ -44,3 +44,58 @@ export const checkInactivityPenalty = async (userId) => {
     update(userRef, { lastActive: Date.now() });
   }
 };
+
+// ---------------------------------------------------------
+// ✅ NEW FEATURE: Smart Message Handler
+// Call this function whenever a user sends a message!
+// ---------------------------------------------------------
+export const handleMessageXP = async (userId) => {
+  if (!userId) return;
+  const userRef = ref(database, `users/${userId}`);
+  const snapshot = await get(userRef);
+  
+  if (!snapshot.exists()) return;
+  const data = snapshot.val();
+  const now = Date.now();
+
+  // 1. 🛡️ SPAM PROTECTION (Cooldown)
+  // User must wait 60 seconds (60000ms) between XP gains
+  const lastXpTime = data.lastXpTime || 0;
+  if (now - lastXpTime < 60000) {
+    // console.log("Spam protection: No XP given."); 
+    return; // Stop here. Too fast!
+  }
+
+  // 2. 🔥 DAILY STREAK LOGIC
+  const lastStreakDate = new Date(data.lastStreakDate || 0).toDateString();
+  const today = new Date().toDateString();
+  const yesterday = new Date(now - 86400000).toDateString(); // 86400000ms = 24 hours
+
+  let currentStreak = data.streak || 0;
+  let bonusXP = 0;
+
+  // Only calculate streak if it's a new day
+  if (lastStreakDate !== today) {
+    if (lastStreakDate === yesterday) {
+      // Logic: Active yesterday -> Streak increases!
+      currentStreak += 1;
+      // Bonus: 5 XP per day (Max 50 XP bonus)
+      bonusXP = Math.min(currentStreak * 5, 50); 
+    } else {
+      // Logic: Missed a day -> Streak resets to 1
+      currentStreak = 1;
+      bonusXP = 5; // Small start bonus
+    }
+  }
+
+  // 3. 💾 SAVE UPDATES
+  await update(userRef, {
+    lastXpTime: now,       // Reset cooldown
+    lastStreakDate: now,   // Mark streak for today
+    streak: currentStreak, // Save new streak count
+    lastActive: now        // Update activity timer
+  });
+
+  // Give Base XP (10) + Any Streak Bonus
+  addXP(userId, 10 + bonusXP);
+};

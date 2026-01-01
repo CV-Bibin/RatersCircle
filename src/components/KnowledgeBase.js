@@ -3,6 +3,7 @@ import { Search, Bell, User, Briefcase, Key } from 'lucide-react';
 import { database, auth } from '../firebase';
 import { ref, onValue, update, remove, push, set } from 'firebase/database';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import ResourcesView from './chat/ResourcesView';
 
 export default function KnowledgeBase({ userData }) {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -155,19 +156,8 @@ export default function KnowledgeBase({ userData }) {
       ) : (
         /* Standard Knowledge Base */
         <div className="flex-1">
-          <div className="mb-6">
-             <label className="text-xs font-bold text-gray-400 mb-2 block uppercase">Search</label>
-             <div className="flex items-center bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
-               <Search size={18} className="text-gray-400" />
-               <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm ml-2 w-full" />
-             </div>
-          </div>
-          <div className="space-y-3">
-             <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 cursor-pointer">
-               <div className="p-2 bg-purple-100 text-purple-500 rounded-lg"><span className="font-bold text-xs">DOC</span></div>
-               <p className="text-sm font-medium text-gray-700">Guidelines 2025</p>
-             </div>
-          </div>
+         <ResourcesView userRole={userData?.role} />
+          
         </div>
       )}
     </div>

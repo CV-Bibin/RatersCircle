@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Video } from 'lucide-react';
 import { database } from '../firebase';
-// 1. IMPORT 'update'
 import { ref, push, set, serverTimestamp, update } from 'firebase/database';
+
+// ✅ NO SOUND IMPORT HERE
 
 export default function MeetingModal({ isOpen, onClose, groupId, groupName, currentUser }) {
   const jitsiContainerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const notificationSentRef = useRef(false);
-  // 2. NEW REF: To remember which message ID we sent
   const meetingMessageIdRef = useRef(null);
+
+  // ✅ NO AUDIO REFS
 
   useEffect(() => {
     if (!isOpen || !groupId) {
@@ -32,13 +34,13 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
                 senderId: currentUser.uid,
                 senderEmail: currentUser.email,
                 type: 'text', 
-                // Initial Text
                 text: "📞 I have started a Video Meeting. Click the video icon 📹 at the top to join!",
                 createdAt: serverTimestamp(),
                 isSystemMessage: true 
             });
             
             notificationSentRef.current = true;
+            // ✅ NO SOUND PLAYING HERE
         } catch (error) {
             console.error("Failed to send meeting notification", error);
         }
@@ -46,17 +48,14 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
 
     // --- UPDATE TO "ENDED" NOTIFICATION ---
     const endMeetingNotification = async () => {
-        // Only run if we actually sent a start message and have its ID
         if (meetingMessageIdRef.current) {
             try {
                 const messagePath = `groups/${groupId}/messages/${meetingMessageIdRef.current}`;
                 await update(ref(database, messagePath), {
-                    // Change the text to show it's over
                     text: "🔴 Video Meeting Ended.",
-                    // Optional: You could add a flag to style it gray/inactive
                     isMeetingEnded: true 
                 });
-                meetingMessageIdRef.current = null; // Reset
+                meetingMessageIdRef.current = null;
             } catch (error) {
                 console.error("Failed to update meeting status", error);
             }
@@ -112,7 +111,7 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
         const api = new window.JitsiMeetExternalAPI(domain, options);
 
         api.addEventListener('videoConferenceLeft', () => {
-          onClose(); // This triggers the cleanup function below
+          onClose(); 
           api.dispose();
         });
         
@@ -128,13 +127,12 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
 
     loadJitsiScript();
 
-    // --- CLEANUP FUNCTION (Runs when modal closes) ---
     return () => {
       if (jitsiContainerRef.current) jitsiContainerRef.current.innerHTML = "";
-      // 3. CALL THE UPDATE FUNCTION HERE
       endMeetingNotification();
+      // ✅ NO AUDIO CLEANUP NEEDED
     };
-  }, [isOpen, groupId, groupName, currentUser]); // Removed onClose from dependency to prevent loops
+  }, [isOpen, groupId, groupName, currentUser]);
 
   if (!isOpen) return null;
 

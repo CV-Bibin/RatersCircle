@@ -11,6 +11,16 @@ const isAudioFile = (msg) => {
 };
 
 
+// Helper: Checks if the message is JUST emojis (1 to 3 characters)
+const isSingleSticker = (text) => {
+    if (!text) return false;
+    // Allow Pictographs, Emojis, Joiners (200D), and Variation Selectors (FE0F)
+    const emojiRegex = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\u200D\uFE0F\s]{1,10}$/u;
+    return emojiRegex.test(text.trim()) && !/[a-zA-Z0-9]/.test(text); // Double check no text
+};
+
+
+
 
 
 export default function MessageItem({
@@ -31,6 +41,28 @@ export default function MessageItem({
     const senderLiveProfile = userProfiles ? userProfiles[msg.senderId] : null;
     const currentXP = isMe ? (userData?.xp || 0) : (senderLiveProfile?.xp || msg.senderXp || 0);
     const currentRole = isMe ? (userData?.role) : (senderLiveProfile?.role || msg.senderRole);
+
+
+
+    // 👇 PASTE THIS START 👇
+    const calculateStars = (role, xp) => {
+        if (role !== 'rater') return 0;
+        const safeXP = Number(xp || 0);
+        if (safeXP >= 2500) return 3; // Legendary
+        if (safeXP >= 1000) return 2; // Pro
+        if (safeXP >= 500) return 1;  // Intermediate
+        return 0; 
+    };
+    const starCount = calculateStars(currentRole, currentXP);
+
+    const StarBadge = starCount > 0 ? (
+        <div className="flex gap-[1px] ml-1">
+            {[...Array(starCount)].map((_, i) => (
+                <Star key={i} size={8} className="text-yellow-500 fill-yellow-500" />
+            ))}
+        </div>
+    ) : null;
+    // 👆 PASTE THIS END 👆
 
     const canDelete = isMe || isManager;
     // Allow editing if type is 'text' OR if type is missing (legacy messages)
@@ -285,15 +317,52 @@ const renderMessageContent = () => {
         return renderDeletedBubble();
     }
 
-    return (
+ return (
         <div className="flex flex-col">
-            <p className="text-sm leading-relaxed">{highlightText(msg.text, searchTerm)}</p>
+            
+            {/* --- ANIMATED STICKER LOGIC (ZOOM IN/OUT) --- */}
+            {isSingleSticker(msg.text) ? (
+                <div className="p-2 bg-transparent relative group/sticker">
+                    <style>
+                        {`
+                          /* Define the Zoom In/Out Animation */
+                          @keyframes breatheAnimation {
+                            0% { transform: scale(1); }
+                            50% { transform: scale(1.2); } /* Zoom In */
+                            100% { transform: scale(1); }  /* Zoom Out */
+                          }
+                          
+                          /* Optional: A Bounce Animation (Uncomment to use instead) */
+                          @keyframes bounceAnimation {
+                            0%, 100% { transform: translateY(0); }
+                            50% { transform: translateY(-10px); }
+                          }
+                        `}
+                    </style>
+                    
+                    <span 
+                        className="text-5xl inline-block cursor-default origin-center drop-shadow-sm"
+                        style={{ 
+                            /* Change 'breatheAnimation' to 'bounceAnimation' if you prefer bouncing */
+                            animation: 'breatheAnimation 2s infinite ease-in-out',
+                            textShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                        }}
+                    >
+                        {msg.text}
+                    </span>
+                </div>
+            ) : (
+                <p className="text-sm leading-relaxed">{highlightText(msg.text, searchTerm)}</p>
+            )}
+            {/* ------------------------------------------- */}
+
             <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'} opacity-90`}>
                 {msg.isEdited && <span className="text-[9px] mr-1 opacity-70">(edited)</span>}
                 {isStarred && <Star size={10} fill="currentColor" className="text-yellow-300 mr-1" />}
                 <span className="text-[9px] opacity-70">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 {isMe && <div className="ml-1 translate-y-[1px]">{getStatusIcon()}</div>}
             </div>
+            
             {showEditHistory && (
                 <div className={`mt-3 pt-2 border-t text-left ${isMe ? 'border-white/20' : 'border-black/10'}`}>
                     <p className={`text-[9px] font-bold mb-1 ${isMe ? 'text-white/80' : 'text-gray-500'}`}>Edit History (Admin):</p>
@@ -310,11 +379,21 @@ const renderMessageContent = () => {
 
     return (
         <div id={msg.id} className={`flex gap-3 ${marginClass} group ${isMe ? 'flex-row-reverse' : ''} relative scroll-mt-32`}>
-
-            {/* AVATAR: Only show if showAvatar is true */}
-            <div className="shrink-0 w-[45px]">
+{/* AVATAR: Only show if showAvatar is true */}
+            <div className="shrink-0 w-[45px] relative overflow-visible">
                 {showAvatar ? (
-                    <AnimeDP seed={msg.senderEmail || msg.senderId} role={currentRole} size={45} xp={currentXP} />
+                    <>
+                        <AnimeDP seed={msg.senderEmail || msg.senderId} role={currentRole} size={45} xp={currentXP} />
+
+                        {/* ⭐ PURE FLAT STARS (No Shadow, No Background) ⭐ */}
+                        {starCount > 0 && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 z-20">
+                                {[...Array(starCount)].map((_, i) => (
+                                    <Star key={i} size={10} className="text-yellow-400 fill-yellow-400" />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 ) : (
                     // Placeholder to keep alignment
                     <div className="w-[45px]" />
