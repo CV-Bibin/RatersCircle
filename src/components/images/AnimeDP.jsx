@@ -1,11 +1,17 @@
 import React, { useMemo } from "react";
+// ✅ UPDATED IMPORTS: All the icons from your Member List logic
 import { 
+  // Admin Icons (Kept existing ones)
   Crown, Gem, ShieldCheck, Trophy, Award, 
-  Rocket, Zap, Star, Mountain, Flag,
-  Watch, Camera, Smartphone, Headphones, Laptop, 
-  Anchor, Coffee, Sun, Moon, Music, Heart 
+  // Leader Icons (The strict 10 you wanted)
+  Flag, Compass, Megaphone, Lightbulb, Zap, Target, Dumbbell, GraduationCap, Gavel,
+  // Rater Icons (The Office/Work set)
+  Laptop, Monitor, Mouse, Gamepad2, Book, Stamp, Briefcase, Keyboard, Headphones, Coffee, FileText, ClipboardList,
+  // User/Default Icons
+  Anchor, Sun, Moon, Music, Heart 
 } from "lucide-react";
-import { getUserLevel } from "../../utils/LevelSystem"; // ✅ CORRECT
+
+import { getUserLevel } from "../../utils/LevelSystem"; 
 
 export default function AnimeDP({ seed, role, xp = 0, size = 48 }) {
   
@@ -21,19 +27,36 @@ export default function AnimeDP({ seed, role, xp = 0, size = 48 }) {
     }
     const index = Math.abs(hash);
 
+    // --- ICON SETS ---
     const adminIcons = [Crown, Gem, ShieldCheck, Trophy, Award];
-    const leaderIcons = [Rocket, Zap, Star, Mountain, Flag];
-    const raterIcons = [Watch, Camera, Smartphone, Headphones, Laptop];
+    
+    // ✅ LEADER ICONS: Matches your Member List (NO ROCKET)
+    const leaderIcons = [
+        Flag, Compass, Megaphone, Trophy, Lightbulb, 
+        Zap, Target, Dumbbell, GraduationCap, Gavel
+    ];
+
+    // ✅ RATER ICONS: Matches your Member List (Office/Work)
+    const raterIcons = [
+        Laptop, Monitor, Mouse, Gamepad2, Book, Stamp, 
+        Briefcase, Keyboard, Headphones, Coffee, FileText, ClipboardList
+    ];
+
     const userIcons = [Anchor, Coffee, Sun, Moon, Music, Heart];
 
     let iconList, bgClass;
 
+    // --- ROLE LOGIC ---
     switch (role) {
       case "admin": iconList = adminIcons; bgClass = "bg-black"; break;
       case "co_admin": iconList = adminIcons; bgClass = "bg-[#5d4037]"; break;
+      
+      // Both Leader types share the "Leader Icons" list
       case "leader": 
       case "group_leader": iconList = leaderIcons; bgClass = "bg-purple-800"; break;
-      case "rater": iconList = raterIcons; bgClass = "bg-green-900"; break; // Dark bg for contrast
+      
+      case "rater": iconList = raterIcons; bgClass = "bg-green-900"; break; 
+      
       default: iconList = userIcons; bgClass = "bg-blue-800"; break;
     }
 
