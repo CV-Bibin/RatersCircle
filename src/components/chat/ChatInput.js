@@ -82,6 +82,39 @@ export default function ChatInput({
     }
   };
 
+
+// ✅ NEW: ROBUST PASTE HANDLER (Checks Files AND Screenshots)
+const handlePaste = (e) => {
+  console.log("Paste detected!"); 
+
+  // 1. Check if user copied a File directly (e.g. from Desktop)
+  if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+    const file = e.clipboardData.files[0];
+    if (file.type.startsWith('image/')) {
+      console.log("Pasting File:", file.name);
+      e.preventDefault();
+      onUploadFile(file);
+      return;
+    }
+  }
+
+  // 2. Check if user pasted "Data" (e.g. Screenshot or Right-click > Copy Image)
+  if (e.clipboardData.items) {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          console.log("Pasting Screenshot");
+          e.preventDefault();
+          onUploadFile(file);
+          return;
+        }
+      }
+    }
+  }
+};
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -227,6 +260,7 @@ export default function ChatInput({
                 placeholder={editingMessage ? "Update..." : "Type a message..."}
                 value={newMessage}
                 onChange={handleTyping} // Uses updated handler
+                onPaste={handlePaste}
              />
           )}
           
