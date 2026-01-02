@@ -1,61 +1,86 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Video } from 'lucide-react';
 import { database } from '../firebase';
-import { ref, push, set, serverTimestamp, update } from 'firebase/database';
-
-// ✅ NO SOUND IMPORT HERE
+// ✅ ADDED 'get' to imports
+import { ref, push, set, serverTimestamp, update, get } from 'firebase/database';
 
 export default function MeetingModal({ isOpen, onClose, groupId, groupName, currentUser }) {
   const jitsiContainerRef = useRef(null);
   const [loading, setLoading] = useState(true);
-  const notificationSentRef = useRef(false);
+  
+  // Track if THIS user is the one who started the meeting
+  const isInitiatorRef = useRef(false);
   const meetingMessageIdRef = useRef(null);
-
-  // ✅ NO AUDIO REFS
 
   useEffect(() => {
     if (!isOpen || !groupId) {
-        notificationSentRef.current = false;
+        isInitiatorRef.current = false;
         return;
     }
 
-    // --- SEND "STARTED" NOTIFICATION ---
-    const sendMeetingNotification = async () => {
-        if (notificationSentRef.current) return;
-        
+    // --- CHECK STATUS AND SEND NOTIFICATION ---
+    const checkAndStartMeeting = async () => {
         try {
+            // 1. Check if meeting is already active in DB
+            const statusRef = ref(database, `groups/${groupId}/meetingStatus`);
+            const snapshot = await get(statusRef);
+            const status = snapshot.val();
+
+            // If meeting is already active, DO NOT send a new message
+            if (status && status.isActive) {
+                console.log("Meeting already active, joining silently...");
+                // We still capture the messageId just in case, but we won't edit it
+                meetingMessageIdRef.current = status.messageId;
+                return; 
+            }
+
+            // 2. If NO active meeting, start one
+            isInitiatorRef.current = true; // Mark this user as the host
+
             const messagesRef = ref(database, `groups/${groupId}/messages`);
             const newMessageRef = push(messagesRef);
-            
-            // Save the ID so we can edit it later
             meetingMessageIdRef.current = newMessageRef.key;
-            
+
+            // Send "Started" Message
             await set(newMessageRef, {
                 senderId: currentUser.uid,
                 senderEmail: currentUser.email,
-                type: 'text', 
+                type: 'text',
                 text: "📞 I have started a Video Meeting. Click the video icon 📹 at the top to join!",
                 createdAt: serverTimestamp(),
-                isSystemMessage: true 
+                isSystemMessage: true
             });
-            
-            notificationSentRef.current = true;
-            // ✅ NO SOUND PLAYING HERE
+
+            // 3. Mark meeting as ACTIVE in DB so others don't send messages
+            await set(statusRef, {
+                isActive: true,
+                initiatorId: currentUser.uid,
+                messageId: newMessageRef.key,
+                startTime: serverTimestamp()
+            });
+
         } catch (error) {
-            console.error("Failed to send meeting notification", error);
+            console.error("Failed to initialize meeting status", error);
         }
     };
 
-    // --- UPDATE TO "ENDED" NOTIFICATION ---
+    // --- END MEETING (Only if Initiator) ---
     const endMeetingNotification = async () => {
-        if (meetingMessageIdRef.current) {
+        // Only the person who STARTED the meeting can END it in the chat
+        if (isInitiatorRef.current && meetingMessageIdRef.current) {
             try {
+                // Update chat message to "Ended"
                 const messagePath = `groups/${groupId}/messages/${meetingMessageIdRef.current}`;
                 await update(ref(database, messagePath), {
                     text: "🔴 Video Meeting Ended.",
-                    isMeetingEnded: true 
+                    isMeetingEnded: true
                 });
-                meetingMessageIdRef.current = null;
+
+                // Reset meeting status in DB so next person can start a new one
+                const statusRef = ref(database, `groups/${groupId}/meetingStatus`);
+                await set(statusRef, null); // Or set isActive: false
+
+                isInitiatorRef.current = false;
             } catch (error) {
                 console.error("Failed to update meeting status", error);
             }
@@ -76,12 +101,14 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
 
     const startConference = () => {
       setLoading(false);
-      sendMeetingNotification();
+      
+      // Call our new smart function
+      checkAndStartMeeting();
 
       try {
-        const domain = 'jitsi.riot.im'; 
+        const domain = 'jitsi.riot.im';
         const cleanGroupName = groupName.replace(/[^a-zA-Z0-9]/g, '');
-        const uniqueRoomName = `VivekApp_${cleanGroupName}_${groupId}`; 
+        const uniqueRoomName = `VivekApp_${cleanGroupName}_${groupId}`;
 
         const options = {
           roomName: uniqueRoomName,
@@ -94,13 +121,13 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
           configOverwrite: {
             startWithAudioMuted: true,
             startWithVideoMuted: true,
-            prejoinPageEnabled: false, 
-            disableDeepLinking: true, 
+            prejoinPageEnabled: false,
+            disableDeepLinking: true,
           },
           interfaceConfigOverwrite: {
             TOOLBAR_BUTTONS: [
               'microphone', 'camera', 'desktop', 'fullscreen',
-              'hangup', 'profile', 'chat', 'raisehand', 
+              'hangup', 'profile', 'chat', 'raisehand',
               'videoquality', 'tileview', 'select-background'
             ],
             SHOW_JITSI_WATERMARK: false,
@@ -111,7 +138,7 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
         const api = new window.JitsiMeetExternalAPI(domain, options);
 
         api.addEventListener('videoConferenceLeft', () => {
-          onClose(); 
+          onClose();
           api.dispose();
         });
         
@@ -129,8 +156,8 @@ export default function MeetingModal({ isOpen, onClose, groupId, groupName, curr
 
     return () => {
       if (jitsiContainerRef.current) jitsiContainerRef.current.innerHTML = "";
+      // Only runs logic if this user was the initiator
       endMeetingNotification();
-      // ✅ NO AUDIO CLEANUP NEEDED
     };
   }, [isOpen, groupId, groupName, currentUser]);
 
