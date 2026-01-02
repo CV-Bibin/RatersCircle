@@ -1,19 +1,60 @@
 import React from 'react';
-import { CheckCircle, XCircle, BarChart2, Eye, Lock } from 'lucide-react';
+import { CheckCircle, XCircle, BarChart2, Eye, Lock, Users } from 'lucide-react';
 
-export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
-  // 1. EXTRACT DATA CORRECTLY
-  const poll = msg.poll || {}; // <--- FIX: Read from 'poll' object
-  
+export default function PollMessage({ msg, currentUser, onVote, onReveal, userProfiles, userRole }) {
+  // 1. DATA EXTRACTION
+  const poll = msg.poll || {};
   const options = poll.options || [];
   const totalVotes = options.reduce((acc, opt) => acc + (opt.voteCount || 0), 0);
   
-  // 2. CHECK VOTES (from poll.votes, not msg.votes)
+  // 2. USER STATUS
   const userVoteOptionId = poll.votes ? poll.votes[currentUser.uid] : null; 
   const hasVoted = userVoteOptionId !== undefined && userVoteOptionId !== null;
+  
+  // 3. PERMISSIONS (ROBUST CHECK)
+  const isCreator = msg.senderId === currentUser.uid;
 
-  // 3. REVEAL LOGIC
-  const canReveal = (msg.senderId === currentUser.uid || currentUser.role === 'admin') && poll.isQuiz && !poll.isRevealed;
+  // We check the prop passed from parent, OR the currentUser object
+  const finalRole = userRole || currentUser?.role;
+
+  // ✅ LIST OF ROLES who can see the report
+  const ALLOWED_ROLES = ['admin', 'co_admin', 'assistant_admin', 'leader', 'group_leader'];
+  
+  // Check if the detected role is in the allowed list
+  const isLeadership = ALLOWED_ROLES.includes(finalRole);
+
+  // Show report if user is Leadership OR if they created the poll
+  const canViewReport = isLeadership || isCreator;
+  
+  const canReveal = canViewReport && poll.isQuiz && !poll.isRevealed;
+
+  // 4. GENERATE REPORT DATA
+  const getBreakdown = () => {
+    if (!poll.votes) return { correct: [], wrong: [] };
+
+    const breakdown = { correct: [], wrong: [] };
+
+    Object.entries(poll.votes).forEach(([uid, optionId]) => {
+      // Get Name or Fallback
+      let name = "Unknown";
+      
+      if (uid === currentUser.uid) {
+          name = "You";
+      } else if (userProfiles && userProfiles[uid]) {
+          name = userProfiles[uid].displayName || userProfiles[uid].email?.split('@')[0];
+      }
+      
+      if (optionId === poll.correctOptionId) {
+        breakdown.correct.push(name);
+      } else {
+        breakdown.wrong.push(name);
+      }
+    });
+
+    return breakdown;
+  };
+
+  const reportData = canViewReport ? getBreakdown() : null;
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm w-full min-w-[250px] max-w-sm">
@@ -39,27 +80,22 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
           const percentage = totalVotes === 0 ? 0 : Math.round(((opt.voteCount || 0) / totalVotes) * 100);
           const isSelected = userVoteOptionId === opt.id;
           
-          // Styling Logic
           let statusColor = "bg-white border-gray-200"; 
           let progressColor = "bg-gray-100"; 
           let textColor = "text-gray-700";
           let icon = null;
 
-          // REVEALED STATE (Quiz Answer)
           if (poll.isRevealed) {
             if (opt.id === poll.correctOptionId) {
-              // This is the Correct Answer
               statusColor = "border-green-500 bg-green-50";
               progressColor = "bg-green-200";
               icon = <CheckCircle size={14} className="text-green-600" />;
             } else if (isSelected) {
-              // User picked Wrong Answer
               statusColor = "border-red-300 bg-red-50";
               progressColor = "bg-red-200";
               icon = <XCircle size={14} className="text-red-500" />;
             }
           } 
-          // VOTED STATE (Hidden Result)
           else if (isSelected) {
              statusColor = "border-blue-500 bg-blue-50";
              progressColor = "bg-blue-200";
@@ -70,14 +106,12 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
           return (
             <button 
               key={opt.id}
-              // Disable if user voted AND change is not allowed
               disabled={hasVoted && !poll.allowVoteChange}
               onClick={() => onVote(msg.id, opt.id)}
               className={`relative w-full text-left p-2.5 rounded-xl border transition-all duration-200 overflow-hidden group 
                 ${hasVoted && !poll.allowVoteChange ? 'cursor-default' : 'hover:border-blue-300 active:scale-[0.98] cursor-pointer'} 
                 ${statusColor}`}
             >
-              {/* Progress Bar Background */}
               {hasVoted && (
                 <div 
                   className={`absolute top-0 left-0 h-full transition-all duration-500 opacity-50 ${progressColor}`} 
@@ -85,7 +119,6 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
                 />
               )}
 
-              {/* Option Text & Icons */}
               <div className="relative z-10 flex justify-between items-center text-sm">
                 <span className={`font-semibold flex items-center gap-2 ${textColor}`}>
                    {opt.text}
@@ -99,7 +132,7 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
         })}
       </div>
 
-      {/* Admin / Creator Reveal Button */}
+      {/* Reveal Button */}
       {canReveal && (
         <button 
           onClick={() => onReveal(msg.id)}
@@ -107,6 +140,40 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
         >
           <Eye size={14} /> Reveal Answer
         </button>
+      )}
+
+      {/* ✅ REPORT SECTION */}
+      {canViewReport && poll.isRevealed && (
+        <div className="mt-4 pt-3 border-t border-gray-100 bg-gray-50 p-3 rounded-xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex items-center gap-1.5 mb-2">
+             <div className="p-1 bg-gray-200 rounded text-gray-600"><Users size={12} /></div>
+             <h5 className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+               {isCreator ? "My Quiz Report" : "Leadership Report"}
+             </h5>
+          </div>
+          
+          <div className="space-y-3">
+            {/* Correct List */}
+            <div>
+              <span className="text-[10px] font-bold text-green-600 flex items-center gap-1 uppercase mb-0.5">
+                <CheckCircle size={10} /> CORRECT ({reportData.correct.length})
+              </span> 
+              <div className="text-[11px] text-gray-700 leading-tight bg-white p-2 rounded border border-gray-100 min-h-[30px] flex items-center">
+                {reportData.correct.length > 0 ? reportData.correct.join(', ') : <span className="text-gray-400 italic">No one yet</span>}
+              </div>
+            </div>
+            
+            {/* Wrong List */}
+            <div>
+              <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 uppercase mb-0.5">
+                <XCircle size={10} /> WRONG ({reportData.wrong.length})
+              </span> 
+              <div className="text-[11px] text-gray-700 leading-tight bg-white p-2 rounded border border-gray-100 min-h-[30px] flex items-center">
+                {reportData.wrong.length > 0 ? reportData.wrong.join(', ') : <span className="text-gray-400 italic">No one yet</span>}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Footer Info */}
@@ -122,6 +189,12 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal }) {
              <p className="text-[10px] text-gray-400 flex items-center gap-1"><Lock size={10} /> Locked</p>
          )}
       </div>
+
+      {/* 👇 DEBUG HELPER: REMOVE THIS AFTER IT WORKS */}
+      {/* <div className="mt-2 text-[8px] text-gray-300 text-center">
+         DEBUG: Your Role = {finalRole || "undefined"}
+      </div> 
+      */}
     </div>
   );
 }

@@ -197,7 +197,7 @@ export default function MessageItem({
         // 1. POLLS
         if (msg.type === 'poll') {
             if (isDeleted) return renderDeletedBubble();
-            return <PollMessage msg={msg} currentUser={currentUser} onVote={onVote} onReveal={onReveal} />;
+            return <PollMessage msg={msg} currentUser={currentUser} onVote={onVote} onReveal={onReveal} userProfiles={userProfiles} userRole={userData?.role} />;
         }
 
         // 2. VOICE MESSAGES (Recorded via Mic)
