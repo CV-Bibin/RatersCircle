@@ -233,7 +233,15 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
             onEdit={setEditingMessage}
             onVote={handleVote}
             onReveal={handleReveal}
-            onForward={setMsgToForward}
+            onForward={(msg) => {
+    // Check: Is it a Rater trying to forward a Poll?
+    if (isRater && msg.type === 'poll') {
+      showToast("Permission Denied: Raters cannot forward polls.", "error");
+      return; // Stop here. Do not open the modal.
+    }
+    // Otherwise, allow it
+    setMsgToForward(msg);
+  }}
             onReplyClick={scrollToMessage}
             onStar={handleStarMessage}
             isStarred={starredMessages && starredMessages[msg.id]}
