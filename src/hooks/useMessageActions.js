@@ -50,12 +50,9 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
     return false;
   };
 
-  // --- FIXED & SMART UPLOAD LOGIC ---
   const handleFileUpload = async (file, category = 'file') => {
     if (!file) return;
 
-    // ✅ SMART AUTO-DETECTION
-    // Even if 'category' says "file", we check if it is actually an image/video.
     let smartType = category;
     if (smartType === 'file') {
         if (file.type && file.type.startsWith('image/')) smartType = 'image';
@@ -65,7 +62,6 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
     const chatRef = ref(database, `groups/${activeGroup.id}/messages`);
     const newMsgRef = push(chatRef);
     
-    // Use smartType for the initial "Uploading..." bubble
     await set(newMsgRef, {
         type: smartType, 
         isUploading: true, 
@@ -92,8 +88,6 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
 
         if (res.ok && data.secure_url) {
             let finalType = smartType; 
-            
-            // Safety Check: If a PDF was somehow marked as image, force it back to file
             if (finalType === 'image' && file.name.toLowerCase().endsWith('.pdf')) finalType = 'file';
 
             const fileSize = (file.size / (1024 * 1024));
@@ -102,7 +96,7 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
             await update(newMsgRef, {
                 mediaUrl: data.secure_url,
                 resourceType: data.resource_type || 'auto', 
-                type: finalType, // ✅ Shows as Photo if it is one!
+                type: finalType, 
                 fileSize: sizeStr,
                 isUploading: null 
             });
@@ -119,7 +113,6 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
     }
   };
 
-  // ... (keep handleSendAudio, handleCreatePoll, handleForwardAction as is) ...
   const handleSendAudio = (audioBlob) => {
     const reader = new FileReader();
     reader.readAsDataURL(audioBlob);
@@ -134,36 +127,87 @@ export default function useMessageActions(activeGroup, currentUser, userData) {
     };
   };
 
+  // ✅ CREATE POLL (Added 'text' field so it shows up)
   const handleCreatePoll = async (pollData) => {
     const chatRef = ref(database, `groups/${activeGroup.id}/messages`);
     await set(push(chatRef), {
-      type: 'poll', ...pollData,
-      senderId: currentUser.uid, senderEmail: currentUser.email,
-      senderRole: userData?.role || 'user', senderXp: userData?.xp || 0, createdAt: Date.now()
+      type: 'poll',
+      text: pollData.question, // 👈 CRITICAL: Needed for search filter
+      poll: pollData, 
+      senderId: currentUser.uid, 
+      senderEmail: currentUser.email,
+      senderRole: userData?.role || 'user', 
+      senderXp: userData?.xp || 0, 
+      createdAt: Date.now()
     });
     addXP(currentUser.uid, 2);
   };
 
-  const handleForwardAction = async (msgToForward, targetGroupIds) => {
-    if (!msgToForward) return;
-    for (const groupId of targetGroupIds) {
-        const chatRef = ref(database, `groups/${groupId}/messages`);
-        const newMsg = {
-            senderId: currentUser.uid, senderEmail: currentUser.email,
-            senderRole: userData?.role || 'user', senderXp: userData?.xp || 0,
-            createdAt: Date.now(), isForwarded: true,
-            type: msgToForward.type || 'text',
-            text: msgToForward.text || "",
-            mediaUrl: msgToForward.mediaUrl || null,
-            fileName: msgToForward.fileName || null,
-            fileSize: msgToForward.fileSize || null,
-            audioUrl: msgToForward.audioUrl || null
-        };
-        if (msgToForward.type === 'poll') {
-            newMsg.question = msgToForward.question;
-            newMsg.options = msgToForward.options.map(opt => ({ id: opt.id, text: opt.text, voteCount: 0 }));
+  // ✅ FORWARD ACTION (Added 'text' field so it shows up)
+  const handleForwardAction = async (arg1, arg2) => {
+    let msgToForward = arg1;
+    let targetGroupIds = arg2;
+
+    if (Array.isArray(arg1) && !Array.isArray(arg2)) {
+        msgToForward = arg2;
+        targetGroupIds = arg1;
+    }
+
+    if (!msgToForward || !targetGroupIds || !Array.isArray(targetGroupIds)) {
+        console.error("⛔ Forward Blocked: Invalid Data", { msg: msgToForward, targets: targetGroupIds });
+        return;
+    }
+
+    for (const item of targetGroupIds) {
+       const targetId = typeof item === 'object' ? item.id : item;
+       const chatRef = ref(database, `groups/${targetId}/messages`);
+       
+       const newMsg = {
+           senderId: currentUser.uid, 
+           senderEmail: currentUser.email,
+           senderRole: userData?.role || 'user', 
+           senderXp: userData?.xp || 0,
+           createdAt: Date.now(), 
+           isForwarded: true,
+           type: msgToForward.type || 'text'
+       };
+       
+       if (msgToForward.type === 'poll') {
+            const sourcePoll = msgToForward.poll || msgToForward;
+            let safeOptions = [];
+            const rawOptions = sourcePoll.options;
+
+            if (Array.isArray(rawOptions)) {
+                safeOptions = rawOptions;
+            } else if (rawOptions && typeof rawOptions === 'object') {
+                safeOptions = Object.values(rawOptions);
+            }
+
+            // 👈 CRITICAL: Add 'text' so ChatWindow doesn't filter it out!
+            newMsg.text = sourcePoll.question || "Forwarded Poll"; 
+
+            newMsg.poll = {
+                question: sourcePoll.question || "Forwarded Poll",
+                isQuiz: sourcePoll.isQuiz || false,
+                correctOptionId: sourcePoll.correctOptionId || null,
+                allowVoteChange: sourcePoll.allowVoteChange || false,
+                votes: {}, 
+                isRevealed: false,
+                options: safeOptions.map((opt, index) => ({ 
+                    id: opt.id || index, 
+                    text: opt.text || "Option", 
+                    voteCount: 0 
+                }))
+            };
+        } else {
+            newMsg.text = msgToForward.text || "";
+            newMsg.mediaUrl = msgToForward.mediaUrl || null;
+            newMsg.fileName = msgToForward.fileName || null;
+            newMsg.fileSize = msgToForward.fileSize || null;
+            newMsg.audioUrl = msgToForward.audioUrl || null;
         }
-        await set(push(chatRef), newMsg);
+
+       await set(push(chatRef), newMsg);
     }
   };
 

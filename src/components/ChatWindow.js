@@ -468,7 +468,15 @@ export default function ChatWindow({ activeGroup, currentUser, userData }) {
         onCreate={onPollSubmit}
       />
       <DeleteModal isOpen={!!msgToDelete} onClose={() => setMsgToDelete(null)} onConfirm={confirmDeleteAction} />
-      <ForwardModal isOpen={!!msgToForward} onClose={() => setMsgToForward(null)} onForward={handleForwardAction} currentUser={currentUser} />
-    </div>
+<ForwardModal 
+  isOpen={!!msgToForward} 
+  onClose={() => setMsgToForward(null)} 
+  
+  // ✅ CORRECT: Do NOT pass arguments here. 
+  // Just pass the function name. 'useChatLogic' handles the rest.
+  onForward={handleForwardAction} 
+  
+  currentUser={currentUser} 
+/>    </div>
   );
 }

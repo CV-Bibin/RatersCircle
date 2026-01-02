@@ -2,42 +2,34 @@ import React from 'react';
 import { CheckCircle, XCircle, BarChart2, Eye, Lock, Users } from 'lucide-react';
 
 export default function PollMessage({ msg, currentUser, onVote, onReveal, userProfiles, userRole }) {
-  // 1. DATA EXTRACTION
+  // 1. DATA EXTRACTION (SAFE MODE)
   const poll = msg.poll || {};
-  const options = poll.options || [];
+  
+  // 🛡️ CRITICAL FIX: Handle if Firebase returns options as an Object instead of Array
+  const rawOptions = poll.options || [];
+  const options = Array.isArray(rawOptions) ? rawOptions : Object.values(rawOptions);
+
   const totalVotes = options.reduce((acc, opt) => acc + (opt.voteCount || 0), 0);
   
   // 2. USER STATUS
   const userVoteOptionId = poll.votes ? poll.votes[currentUser.uid] : null; 
   const hasVoted = userVoteOptionId !== undefined && userVoteOptionId !== null;
   
-  // 3. PERMISSIONS (ROBUST CHECK)
+  // 3. PERMISSIONS
   const isCreator = msg.senderId === currentUser.uid;
-
-  // We check the prop passed from parent, OR the currentUser object
   const finalRole = userRole || currentUser?.role;
-
-  // ✅ LIST OF ROLES who can see the report
   const ALLOWED_ROLES = ['admin', 'co_admin', 'assistant_admin', 'leader', 'group_leader'];
-  
-  // Check if the detected role is in the allowed list
   const isLeadership = ALLOWED_ROLES.includes(finalRole);
-
-  // Show report if user is Leadership OR if they created the poll
   const canViewReport = isLeadership || isCreator;
-  
   const canReveal = canViewReport && poll.isQuiz && !poll.isRevealed;
 
   // 4. GENERATE REPORT DATA
   const getBreakdown = () => {
     if (!poll.votes) return { correct: [], wrong: [] };
-
     const breakdown = { correct: [], wrong: [] };
 
     Object.entries(poll.votes).forEach(([uid, optionId]) => {
-      // Get Name or Fallback
       let name = "Unknown";
-      
       if (uid === currentUser.uid) {
           name = "You";
       } else if (userProfiles && userProfiles[uid]) {
@@ -50,7 +42,6 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
         breakdown.wrong.push(name);
       }
     });
-
     return breakdown;
   };
 
@@ -118,13 +109,10 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
                   style={{ width: `${percentage}%` }}
                 />
               )}
-
               <div className="relative z-10 flex justify-between items-center text-sm">
                 <span className={`font-semibold flex items-center gap-2 ${textColor}`}>
-                   {opt.text}
-                   {icon}
+                   {opt.text} {icon}
                 </span>
-                
                 {hasVoted && <span className="text-xs font-bold text-gray-500">{percentage}%</span>}
               </div>
             </button>
@@ -132,7 +120,6 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
         })}
       </div>
 
-      {/* Reveal Button */}
       {canReveal && (
         <button 
           onClick={() => onReveal(msg.id)}
@@ -142,7 +129,7 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
         </button>
       )}
 
-      {/* ✅ REPORT SECTION */}
+      {/* Report Section */}
       {canViewReport && poll.isRevealed && (
         <div className="mt-4 pt-3 border-t border-gray-100 bg-gray-50 p-3 rounded-xl animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-center gap-1.5 mb-2">
@@ -151,9 +138,7 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
                {isCreator ? "My Quiz Report" : "Leadership Report"}
              </h5>
           </div>
-          
           <div className="space-y-3">
-            {/* Correct List */}
             <div>
               <span className="text-[10px] font-bold text-green-600 flex items-center gap-1 uppercase mb-0.5">
                 <CheckCircle size={10} /> CORRECT ({reportData.correct.length})
@@ -162,8 +147,6 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
                 {reportData.correct.length > 0 ? reportData.correct.join(', ') : <span className="text-gray-400 italic">No one yet</span>}
               </div>
             </div>
-            
-            {/* Wrong List */}
             <div>
               <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 uppercase mb-0.5">
                 <XCircle size={10} /> WRONG ({reportData.wrong.length})
@@ -189,12 +172,6 @@ export default function PollMessage({ msg, currentUser, onVote, onReveal, userPr
              <p className="text-[10px] text-gray-400 flex items-center gap-1"><Lock size={10} /> Locked</p>
          )}
       </div>
-
-      {/* 👇 DEBUG HELPER: REMOVE THIS AFTER IT WORKS */}
-      {/* <div className="mt-2 text-[8px] text-gray-300 text-center">
-         DEBUG: Your Role = {finalRole || "undefined"}
-      </div> 
-      */}
     </div>
   );
 }
